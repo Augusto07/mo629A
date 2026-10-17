@@ -1,0 +1,142 @@
+:root {
+    --bg: #EEF1F4;
+    --ink: #16212B;
+    --muted: #5B6B79;
+    --line: #D5DCE3;
+    --panel: #FFFFFF;
+    --accent: #B3122E;
+    --accent2: #1F5C7A;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  img, canvas { max-width: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 400 16px/1.5 "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap {
+    max-width: 1080px; margin: 0 auto;
+    padding-left: max(20px, env(safe-area-inset-left));
+    padding-right: max(20px, env(safe-area-inset-right));
+  }
+
+  header { background: var(--ink); color: #fff; border-bottom: 4px solid var(--accent); }
+  .topo {
+    display: flex; justify-content: space-between; align-items: flex-end;
+    gap: 24px; flex-wrap: wrap; padding-top: 36px; padding-bottom: 22px;
+  }
+  h1 {
+    margin: 0;
+    font: 700 clamp(2.4rem, 6vw, 3.8rem)/1 "Bricolage Grotesque", system-ui, sans-serif;
+    letter-spacing: -0.02em;
+  }
+  .sub { margin: 10px 0 0; color: #B8C4CF; }
+  .hoje { text-align: right; }
+  .hoje strong {
+    display: block;
+    font: 700 clamp(2.6rem, 7vw, 4rem)/1 "Bricolage Grotesque", system-ui, sans-serif;
+  }
+  .hoje span { color: #B8C4CF; }
+
+  .abas { display: flex; gap: 24px; flex-wrap: wrap; }
+  .abas a {
+    display: inline-flex; align-items: center; min-height: 44px;
+    color: #B8C4CF; text-decoration: none;
+    padding: 0 2px; border-bottom: 3px solid transparent;
+  }
+  .abas a:hover { color: #fff; }
+  .abas a[aria-current="page"] { color: #fff; border-bottom-color: #fff; }
+  .abas a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+  main { padding: 28px 0 8px; }
+  .painel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 22px;
+    margin-bottom: 22px;
+  }
+  .painel-topo {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 16px; flex-wrap: wrap; margin-bottom: 18px;
+  }
+  h2 {
+    margin: 0;
+    font: 700 1.3rem/1.2 "Bricolage Grotesque", system-ui, sans-serif;
+  }
+  .painel-topo p { margin: 4px 0 0; color: var(--muted); font-size: 0.92rem; }
+  /* O texto ocupa o espaço que sobra e o seletor fica sempre à direita, mesmo com descrição longa */
+  .painel-topo > div { flex: 1 1 280px; min-width: 0; }
+  .painel-topo > label { flex: 0 0 auto; }
+  .painel-topo > .controles { flex: 0 0 auto; display: flex; gap: 12px; flex-wrap: wrap; }
+
+  label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: var(--muted); }
+  select, input[type="date"] {
+    font: inherit; color: var(--ink);
+    padding: 8px 10px;
+    border: 1px solid var(--line); border-radius: 6px; background: #fff;
+  }
+  select:focus-visible, input:focus-visible {
+    outline: 2px solid var(--accent2); outline-offset: 2px;
+  }
+
+  .grafico { position: relative; height: 320px; }
+  .vazio { margin: 14px 0 0; color: var(--muted); font-size: 0.92rem; }
+  .resumo { margin: 14px 0 0; color: var(--muted); font-size: 0.92rem; }
+  .resumo:empty { display: none; }
+  .vazio[hidden] { display: none; }
+
+  .rodape { color: var(--muted); font-size: 0.85rem; padding: 0 0 36px; }
+  .erro { color: var(--accent); }
+
+  /* Página "Sobre o projeto" */
+  .texto { padding: 28px 28px 20px; }
+  .texto .coluna { max-width: 68ch; }
+  .texto h2 { margin: 30px 0 8px; }
+  .texto h2:first-child { margin-top: 0; }
+  .texto p { margin: 0 0 12px; }
+  .texto ol, .texto ul { margin: 0 0 12px; padding-left: 22px; }
+  .texto li { margin-bottom: 6px; }
+  .texto a { color: var(--accent2); }
+  .texto a:focus-visible { outline: 2px solid var(--accent2); outline-offset: 2px; }
+  .nota { color: var(--muted); font-size: 0.92rem; }
+
+  /* Rodapé do site */
+  body { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+  main { flex: 1 0 auto; width: 100%; }
+  .rodape-site {
+    background: var(--ink); color: #B8C4CF;
+    border-top: 4px solid var(--accent);
+    margin-top: 16px;
+  }
+  .rodape-conteudo {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    flex-wrap: wrap; gap: 14px 32px;
+    padding-top: 22px;
+    padding-bottom: max(22px, env(safe-area-inset-bottom));
+    font-size: 0.9rem;
+  }
+  .rodape-conteudo p { margin: 0; flex: 1 1 320px; max-width: 60ch; }
+  .rodape-conteudo nav { display: flex; gap: 20px; flex-wrap: wrap; }
+  .rodape-conteudo a {
+    display: inline-flex; align-items: center; min-height: 44px;
+    color: #fff; text-underline-offset: 3px;
+  }
+  .rodape-conteudo a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+  @media (max-width: 600px) {
+    .topo { padding-top: 24px; padding-bottom: 12px; gap: 14px; }
+    .hoje { display: flex; align-items: baseline; gap: 10px; text-align: left; }
+    .hoje strong { font-size: 2.6rem; }
+    .abas { gap: 20px; }
+    main { padding-top: 18px; }
+    .painel { padding: 16px; margin-bottom: 16px; }
+    .painel-topo { margin-bottom: 14px; }
+    .painel-topo label { width: 100%; }
+    .painel-topo > .controles { width: 100%; }
+    select, input[type="date"] { width: 100%; min-height: 44px; }
+    .grafico { height: 260px; }
+    .texto { padding: 20px 16px 12px; }
+  }

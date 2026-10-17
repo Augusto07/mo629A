@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block hoje %}
+    <div class="hoje" aria-live="polite">
+      <strong id="hoje-total">0</strong>
+      <span>entradas hoje</span>
+    </div>
+{% endblock %}
+
+{% block conteudo %}
+  <section class="painel" aria-labelledby="t-dia">
+    <div class="painel-topo">
+      <div>
+        <h2 id="t-dia">Entradas por dia</h2>
+        <p>Total de pessoas que entraram na sala em cada dia.</p>
+      </div>
+      <label>Período
+        <select id="periodo">
+          <option value="7">Últimos 7 dias</option>
+          <option value="14">Últimos 14 dias</option>
+          <option value="30" selected>Últimos 30 dias</option>
+        </select>
+      </label>
+    </div>
+    <div class="grafico"><canvas id="graf-dia" role="img" aria-label="Gráfico de barras com as entradas por dia"></canvas></div>
+  </section>
+
+  <section class="painel" aria-labelledby="t-hora">
+    <div class="painel-topo">
+      <div>
+        <h2 id="t-hora">Entradas por hora</h2>
+        <p>Pessoas que entraram em cada hora do dia escolhido.</p>
+      </div>
+      <label>Dia
+        <input type="date" id="dia">
+      </label>
+    </div>
+    <div class="grafico"><canvas id="graf-hora" role="img" aria-label="Gráfico de barras com as entradas por hora"></canvas></div>
+    <p class="vazio" id="vazio-hora" hidden>Nenhuma entrada registrada neste dia.</p>
+  </section>
+
+  <section class="painel" aria-labelledby="t-sinal">
+    <div class="painel-topo">
+      <div>
+        <h2 id="t-sinal">Sinal Wi-Fi do ESP32</h2>
+        <p>Força do sinal (RSSI) ao longo do dia. Quanto mais alto no gráfico (valor menos negativo), melhor o sinal; abaixo de uns -80 dBm ele já é fraco.</p>
+      </div>
+      <div class="controles">
+        <label>Escala
+          <select id="escala-sinal">
+            <option value="ajustar" selected>Ajustar aos dados</option>
+            <option value="dia">Dia inteiro (0h a 24h)</option>
+          </select>
+        </label>
+        <label>Dia
+          <input type="date" id="dia-sinal">
+        </label>
+      </div>
+    </div>
+    <div class="grafico"><canvas id="graf-sinal" role="img" aria-label="Gráfico de linha com o sinal Wi-Fi do ESP32 ao longo do dia"></canvas></div>
+    <p class="resumo" id="resumo-sinal"></p>
+    <p class="vazio" id="vazio-sinal" hidden>Nenhuma leitura de sinal neste dia.</p>
+  </section>
+
+  <p class="rodape" id="status">Carregando dados...</p>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/painel.js') }}"></script>
+{% endblock %}

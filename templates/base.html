@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{% block titulo %}Unicamp IoT{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/estilo.css') }}">
+</head>
+<body>
+<header>
+  <div class="wrap topo">
+    <div>
+      <h1>Unicamp IoT</h1>
+      <p class="sub">Contagem de pessoas na sala de aula</p>
+    </div>
+    {% block hoje %}{% endblock %}
+  </div>
+  <nav class="wrap abas" aria-label="Principal">
+    <a href="{{ url_for('index') }}"{% if pagina == 'painel' %} aria-current="page"{% endif %}>Painel</a>
+    <a href="{{ url_for('sobre') }}"{% if pagina == 'sobre' %} aria-current="page"{% endif %}>Sobre o projeto</a>
+  </nav>
+</header>
+
+<main class="wrap">
+{% block conteudo %}{% endblock %}
+</main>
+
+<footer class="rodape-site">
+  <div class="wrap rodape-conteudo">
+    <p>Unicamp IoT é um projeto de mestrado que conta as pessoas que entram na sala de aula do Instituto de Computação da Unicamp.</p>
+    <nav aria-label="Rodapé">
+      <a href="{{ url_for('index') }}">Painel</a>
+      <a href="{{ url_for('sobre') }}">Sobre o projeto</a>
+    </nav>
+  </div>
+</footer>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>
