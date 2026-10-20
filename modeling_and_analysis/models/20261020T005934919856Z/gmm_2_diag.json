@@ -1,0 +1,39 @@
+{
+  "split_mode": "exploratory chronological split of ONE session; not independent-session performance",
+  "fast_parameters": {
+    "window_seconds": 5.0,
+    "hop_seconds": 1.0,
+    "min_packets": 12,
+    "max_gap_seconds": 2.0
+  },
+  "slow_parameters": {
+    "window_seconds": 30.0,
+    "hop_seconds": 5.0,
+    "min_packets": 12,
+    "max_gap_seconds": 2.0
+  },
+  "training_sessions": [
+    "csi_20261018_220301"
+  ],
+  "validation_sessions": [
+    "csi_20261018_220301"
+  ],
+  "manifest": "session_id,capture_file,split,reference,room_id,placement_id,day,link_id,notes\ncsi_20261018_220301,captures/csi_20261018_220301.csv,unassigned,false,unknown,unknown,2026-10-18,router_link,Occupancy and reference status not annotated\n",
+  "labels": "session_id,start_s,end_s,person_count,activity,notes\n",
+  "purpose": "signal states, not calibrated occupancy counts",
+  "features": [
+    "amplitude_mean",
+    "amplitude_std_median",
+    "amplitude_mad_median",
+    "amplitude_cv_median",
+    "amplitude_step_median",
+    "amplitude_change_rate_median",
+    "normalized_std_median",
+    "normalized_step_median",
+    "subcarrier_abs_correlation",
+    "pca1_variance_fraction"
+  ],
+  "sklearn_version": "1.9.1",
+  "python_version": "3.12.4",
+  "pipeline_repr": "Pipeline(steps=[('imputer', SimpleImputer(strategy='median')),\n                ('variance', VarianceThreshold()), ('scaler', StandardScaler()),\n                ('model',\n                 GaussianMixture(covariance_type='diag', n_components=2,\n                                 n_init=5, random_state=42,\n                                 reg_covar=0.0001))])"
+}

@@ -1,0 +1,2 @@
+session_id,capture_file,split,reference,room_id,placement_id,day,link_id,notes
+csi_20261018_220301,captures/csi_20261018_220301.csv,unassigned,false,unknown,unknown,2026-10-18,router_link,Occupancy and reference status not annotated

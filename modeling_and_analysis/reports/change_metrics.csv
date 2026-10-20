@@ -1,0 +1,3 @@
+model,status,reference_train_rows,reference_validation_rows,reason
+ledoit_wolf,skipped,0,0,Designate independent stable reference training and validation data in the manifest
+oas,skipped,0,0,Designate independent stable reference training and validation data in the manifest

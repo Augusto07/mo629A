@@ -1,0 +1,4 @@
+model,status,train_rows,validation_rows,reason
+dummy_prior,skipped,0,0,Need labeled training data with >=2 classes and >=2 independent groups
+logistic,skipped,0,0,Need labeled training data with >=2 classes and >=2 independent groups
+random_forest,skipped,0,0,Need labeled training data with >=2 classes and >=2 independent groups
