@@ -1,3 +1,17 @@
+# Segredos e dados locais
+config.py
+secrets.h
+*.db
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Editor / sistema
+.vscode/
+.DS_Store
+Thumbs.db
 # Local dependencies, generated files and development environments
 node_modules/
 managed_components/

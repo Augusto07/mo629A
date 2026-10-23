@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block titulo %}Sobre o projeto | Unicamp IoT{% endblock %}
+
+{% block conteudo %}
+  <article class="painel texto">
+    <div class="coluna">
+      <h2>O que é o projeto</h2>
+      <p>Este projeto conta quantas pessoas entraram na sala de aula do Instituto de Computação da Unicamp. A contagem é feita por um ESP32, um microcontrolador com Wi-Fi, e os resultados aparecem em gráficos neste site.</p>
+      <p>É um projeto de mestrado em desenvolvimento, e o painel mostra os dados à medida que o ESP32 os envia.</p>
+
+      <h2>Como funciona</h2>
+      <ol>
+        <li>O ESP32 detecta quando uma pessoa entra na sala.</li>
+        <li>A cada entrada, ele envia o registro pela internet para o servidor deste site.</li>
+        <li>O servidor guarda o registro com data e hora em um banco de dados.</li>
+        <li>O painel lê os registros guardados e desenha os gráficos.</li>
+      </ol>
+
+      <h2>O que o painel mostra</h2>
+      <ul>
+        <li><strong>Entradas hoje:</strong> o total de pessoas que entraram na sala no dia atual.</li>
+        <li><strong>Entradas por dia:</strong> o total de cada dia, nos últimos 7, 14 ou 30 dias.</li>
+        <li><strong>Entradas por hora:</strong> como as entradas se distribuem ao longo de um dia que você escolhe.</li>
+        <li><strong>Sinal Wi-Fi:</strong> a força do sinal que o ESP32 recebe ao longo do dia, para acompanhar a qualidade da conexão.</li>
+      </ul>
+      <p class="nota">Todos os horários seguem o horário de Brasília.</p>
+
+      <h2>Tecnologias</h2>
+      <ul>
+        <li>ESP32 para a coleta dos dados</li>
+        <li>Python e Flask para o servidor</li>
+        <li>SQLite para o banco de dados</li>
+        <li>Chart.js para os gráficos</li>
+        <li>PythonAnywhere para a hospedagem</li>
+      </ul>
+
+      <p><a href="{{ url_for('index') }}">Ver o painel</a></p>
+    </div>
+  </article>
+{% endblock %}
