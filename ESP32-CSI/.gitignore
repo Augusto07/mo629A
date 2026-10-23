@@ -1,0 +1,58 @@
+# Ferramentas e repositorios auxiliares instalados localmente
+/work/esp-idf/
+/work/espressif-tools/
+/work/toolchain-wrappers/
+/work/source-git-metadata/
+
+# Compilacao e dependencias geradas
+build/
+build-*/
+/work/csi-build*/
+managed_components/
+node_modules/
+CMakeFiles/
+CMakeCache.txt
+compile_commands.json
+
+# Caches e ambientes Python
+.cache/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+ccache/
+component-cache/
+pip-cache/
+
+# Configuracao local, Wi-Fi e segredos
+.env
+.env.*
+!.env.example
+sdkconfig
+sdkconfig.old
+sdkconfig.local.defaults
+wifi.defaults
+WiFi.defaults
+
+# Binarios, backups de flash e logs
+*.bin
+*.elf
+*.map
+*.o
+*.obj
+*.log
+/work/csi-test-summary.json
+
+# Coletas locais: preservar scripts e documentacao de outputs
+/outputs/CSI*.csv
+/outputs/coleta*.csv
+
+# Preferencias locais de editor e sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini

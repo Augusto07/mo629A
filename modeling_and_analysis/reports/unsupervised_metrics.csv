@@ -1,0 +1,9 @@
+model,status,train_rows,validation_rows,representation,clusters,train_noise_fraction,train_silhouette,transformed_dimensions,train_bic,validation_silhouette,validation_log_likelihood,seed_stability_ARI,validation_note
+gmm_1_diag,ok,42,23,scaled_motion,1,0.0,,10,1266.6617623573125,,-13.930758345880319,1.0,
+gmm_2_diag,ok,42,23,scaled_motion,2,0.0,0.32376077677984544,10,1013.5088126292725,0.3684354378218706,-12.139398975525172,1.0,
+gmm_3_diag,ok,42,23,scaled_motion,3,0.0,0.37327429610377283,10,905.80082354966,0.3731488322113982,-11.361925960096181,0.9648786457271058,
+gmm_1_tied,ok,42,23,scaled_motion,1,0.0,,10,760.6221654547464,,-6.243109291956247,1.0,
+gmm_2_tied,ok,42,23,scaled_motion,2,0.0,0.3073183795382481,10,716.5315589870847,,-6.267605840944966,0.7106893518258559,
+gmm_3_tied,ok,42,23,scaled_motion,3,0.0,0.36628413415733574,10,714.2028570737491,0.30544147468350447,-7.68688890225232,0.9686290076687204,
+kmeans_2,ok,42,23,scaled_motion,2,0.0,0.32376077677984544,10,,0.30544147468350447,,1.0,
+hdbscan,ok,42,23,scaled_motion,2,0.5,0.4921469044051783,10,,,,,Estimator has no out-of-sample predict (e.g. sklearn HDBSCAN)

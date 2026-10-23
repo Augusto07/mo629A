@@ -12,3 +12,31 @@ __pycache__/
 .vscode/
 .DS_Store
 Thumbs.db
+# Local dependencies, generated files and development environments
+node_modules/
+managed_components/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.cache/
+.pytest_cache/
+.vscode/
+.idea/
+build/
+build-*/
+*.log
+.DS_Store
+Thumbs.db
+
+# Local settings and secrets
+.env
+.env.*
+!.env.example
+sdkconfig
+sdkconfig.old
+sdkconfig.local.defaults
+wifi.defaults
+WiFi.defaults
+
+# ESP32-CSI tools and captures are governed by ESP32-CSI/.gitignore.
