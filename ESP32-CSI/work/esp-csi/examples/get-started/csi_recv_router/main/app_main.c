@@ -34,8 +34,13 @@
 
 #include "protocol_examples_common.h"
 #include "esp_csi_gain_ctrl.h"
+#include "csi_batch.h"
 
+#if CONFIG_CSI_BATCH_POST_ENABLED
+#define CONFIG_SEND_FREQUENCY      CONFIG_CSI_BATCH_PING_HZ
+#else
 #define CONFIG_SEND_FREQUENCY      100
+#endif
 #if CONFIG_IDF_TARGET_ESP32C5 || CONFIG_IDF_TARGET_ESP32C61
 #define CSI_FORCE_LLTF                      0
 #endif
@@ -50,6 +55,7 @@
 #endif
 
 static const char *TAG = "csi_recv_router";
+static esp_ping_handle_t s_ping_handle;
 
 static void wifi_csi_rx_cb(void *ctx, wifi_csi_info_t *info)
 {
@@ -61,6 +67,10 @@ static void wifi_csi_rx_cb(void *ctx, wifi_csi_info_t *info)
     if (memcmp(info->mac, ctx, 6)) {
         return;
     }
+
+#if CONFIG_CSI_BATCH_POST_ENABLED
+    csi_batch_capture(info);
+#else
 
     const wifi_pkt_rx_ctrl_t *rx_ctrl = &info->rx_ctrl;
     static int s_count = 0;
@@ -123,6 +133,7 @@ static void wifi_csi_rx_cb(void *ctx, wifi_csi_info_t *info)
 #endif
     ets_printf("]\"\n");
     s_count++;
+#endif
 }
 
 static void wifi_csi_init()
@@ -177,18 +188,31 @@ static void wifi_csi_init()
     ESP_ERROR_CHECK(esp_wifi_sta_get_ap_info(&s_ap_info));
     ESP_ERROR_CHECK(esp_wifi_set_csi_config(&csi_config));
     ESP_ERROR_CHECK(esp_wifi_set_csi_rx_cb(wifi_csi_rx_cb, s_ap_info.bssid));
+#if !CONFIG_CSI_BATCH_POST_ENABLED
     ESP_ERROR_CHECK(esp_wifi_set_csi(true));
+#endif
 }
+
+#if CONFIG_CSI_BATCH_POST_ENABLED
+static void wifi_ping_ended(esp_ping_handle_t handle, void *args)
+{
+    (void)handle;
+    (void)args;
+    csi_batch_ping_ended();
+}
+#endif
 
 static esp_err_t wifi_ping_router_start()
 {
-    static esp_ping_handle_t ping_handle = NULL;
 
     esp_ping_config_t ping_config = ESP_PING_DEFAULT_CONFIG();
     ping_config.count             = 0;
     ping_config.interval_ms       = 1000 / CONFIG_SEND_FREQUENCY;
     ping_config.task_stack_size   = 3072;
     ping_config.data_size         = 1;
+#if CONFIG_CSI_BATCH_POST_ENABLED
+    ping_config.timeout_ms        = 100;
+#endif
 
     esp_netif_ip_info_t local_ip;
     esp_netif_get_ip_info(esp_netif_get_handle_from_ifkey("WIFI_STA_DEF"), &local_ip);
@@ -197,8 +221,13 @@ static esp_err_t wifi_ping_router_start()
     ping_config.target_addr.type = ESP_IPADDR_TYPE_V4;
 
     esp_ping_callbacks_t cbs = { 0 };
-    esp_ping_new_session(&ping_config, &cbs, &ping_handle);
-    esp_ping_start(ping_handle);
+#if CONFIG_CSI_BATCH_POST_ENABLED
+    cbs.on_ping_end = wifi_ping_ended;
+#endif
+    ESP_ERROR_CHECK(esp_ping_new_session(&ping_config, &cbs, &s_ping_handle));
+#if !CONFIG_CSI_BATCH_POST_ENABLED
+    ESP_ERROR_CHECK(esp_ping_start(s_ping_handle));
+#endif
 
     return ESP_OK;
 }
@@ -218,4 +247,7 @@ void app_main()
 
     wifi_csi_init();
     wifi_ping_router_start();
+#if CONFIG_CSI_BATCH_POST_ENABLED
+    ESP_ERROR_CHECK(csi_batch_start(s_ping_handle));
+#endif
 }

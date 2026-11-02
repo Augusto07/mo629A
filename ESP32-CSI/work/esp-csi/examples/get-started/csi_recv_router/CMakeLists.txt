@@ -15,5 +15,10 @@ message("EXTRA_COMPONENT_DIRS: " ${EXTRA_COMPONENT_DIRS})
 string(REGEX REPLACE ".*/\(.*\)" "\\1" CURDIR ${CMAKE_CURRENT_SOURCE_DIR})
 project(${CURDIR})
 
+# Regenerate sdkconfig.h when the batch/token menu is edited, even if an
+# existing Ninja build otherwise considers its cached configuration current.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+             "${CMAKE_CURRENT_SOURCE_DIR}/main/Kconfig.projbuild")
+
 git_describe(PROJECT_VERSION ${COMPONENT_DIR})
 message("Project commit: " ${PROJECT_VERSION})

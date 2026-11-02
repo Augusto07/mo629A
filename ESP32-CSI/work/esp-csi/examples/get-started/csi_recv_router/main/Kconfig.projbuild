@@ -1,0 +1,59 @@
+menu "CSI batch POST"
+    config CSI_BATCH_POST_ENABLED
+        bool "Collect CSI in batches and POST while capture is paused"
+        depends on IDF_TARGET_ESP32
+        default y
+
+    if CSI_BATCH_POST_ENABLED
+        config CSI_POST_URL
+            string "HTTP/HTTPS POST URL"
+            default "https://example.invalid/csi"
+            help
+                The default is a stub: batches are discarded without network I/O.
+                Replace it to enable one POST attempt per batch, without retries.
+
+        config CSI_POST_TOKEN
+            string "Bearer token (value only, without Bearer prefix)"
+            default ""
+            help
+                When set, send Authorization: Bearer <token> in each POST.
+                An empty value omits the Authorization header. Keep sdkconfig
+                private: the configured token is also stored in the firmware.
+
+        config CSI_BATCH_MAX_SAMPLES
+            int "Maximum samples in one RAM buffer"
+            range 1 400
+            default 200
+
+        config CSI_BATCH_WINDOW_MS
+            int "Maximum collection window (ms)"
+            range 100 60000
+            default 3000
+
+        config CSI_BATCH_PING_HZ
+            int "Requested router pings per second"
+            range 1 100
+            default 100
+            help
+                Reduce this during network diagnostics. The actual CSI sample
+                rate depends on replies and is not guaranteed by this setting.
+
+        config CSI_POST_TIMEOUT_MS
+            int "POST I/O timeout per phase and body write budget (ms)"
+            range 100 10000
+            default 1000
+            help
+                The body budget starts after connection/TLS setup. Waiting for
+                the response gets a fresh I/O timeout. This is not a total
+                wall-clock limit: the connection, body and response have
+                separate timeouts, and DNS/TLS can take longer.
+                No application retry or redirect is performed.
+
+        config CSI_BATCH_SERIAL_OUTPUT
+            bool "Also print each captured batch as CSV over serial"
+            default n
+            help
+                Preserves the original CSV columns. Printing happens while
+                capture is paused and increases the gap between windows.
+    endif
+endmenu

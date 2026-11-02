@@ -3,6 +3,8 @@
 /work/espressif-tools/
 /work/toolchain-wrappers/
 /work/source-git-metadata/
+/work/gcc-toolchain/
+/work/host-tools/
 
 # Compilacao e dependencias geradas
 build/

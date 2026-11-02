@@ -35,6 +35,20 @@ os.environ.update({
 ninja = next((tools / 'tools/ninja').rglob('ninja.exe'))
 os.environ['CSI_NINJA'] = str(ninja)
 gcc = next((tools / 'tools/xtensa-esp-elf').rglob('xtensa-esp-elf-gcc.exe'))
+
+# GCC builds additional relative paths internally. Keep its invocation path
+# short on Windows so multilib C++ headers remain accessible after relocation.
+if os.name == 'nt':
+    installed_toolchain = gcc.parent.parent.resolve()
+    short_toolchain = root / 'gcc-toolchain'
+    if short_toolchain.is_junction() and short_toolchain.resolve() != installed_toolchain:
+        os.rmdir(short_toolchain)  # Remove only the junction, never its target.
+    if not short_toolchain.exists():
+        subprocess.run(['cmd.exe', '/c', 'mklink', '/J', str(short_toolchain),
+                        str(installed_toolchain)], check=True)
+    if not short_toolchain.is_junction() or short_toolchain.resolve() != installed_toolchain:
+        raise RuntimeError(f'Expected a toolchain junction at {short_toolchain}')
+    gcc = short_toolchain / 'bin/xtensa-esp-elf-gcc.exe'
 gxx = gcc.with_name('xtensa-esp-elf-g++.exe')
 os.environ['CSI_TOOLCHAIN_BIN'] = str(gcc.parent)
 os.environ['XTENSA_GNU_CONFIG'] = str(gcc.parent.parent / 'lib/xtensa_esp32.so')
@@ -44,12 +58,16 @@ cache = build / 'CMakeCache.txt'
 if '--help' not in sys.argv and cache.exists():
     old_home = next((line.split('=', 1)[1] for line in cache.read_text(encoding='utf-8').splitlines()
                      if line.startswith('CMAKE_HOME_DIRECTORY:INTERNAL=')), None)
-    if old_home and os.path.normcase(os.path.normpath(old_home)) != os.path.normcase(str(project)):
-        archived = root / ('csi-build-esp32-before-move-' + datetime.now().strftime('%Y%m%d-%H%M%S-%f'))
+    old_compiler = next((line.split('=', 1)[1] for line in cache.read_text(encoding='utf-8').splitlines()
+                         if line.startswith('CMAKE_CXX_COMPILER:')), None)
+    home_changed = old_home and os.path.normcase(os.path.normpath(old_home)) != os.path.normcase(str(project))
+    compiler_changed = old_compiler and os.path.normcase(os.path.normpath(old_compiler)) != os.path.normcase(str(gxx))
+    if home_changed or compiler_changed:
+        archived = root / ('csi-build-esp32-before-reconfigure-' + datetime.now().strftime('%Y%m%d-%H%M%S-%f'))
         if build.resolve().parent != root or archived.resolve().parent != root:
             raise RuntimeError('Build archive must remain inside this work directory')
         build.rename(archived)
-        print(f'Previous build preserved at {archived}. Rebuilding for the new location.', flush=True)
+        print(f'Previous build preserved at {archived}. Rebuilding for the current paths.', flush=True)
 raise SystemExit(subprocess.call([
     str(python), str(idf / 'tools/idf.py'), '-C', str(project), '-B', str(build),
     '-D', 'SDKCONFIG_DEFAULTS=sdkconfig.local.defaults',

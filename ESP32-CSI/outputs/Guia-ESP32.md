@@ -41,7 +41,7 @@ Arquivos gerados pela compilacao:
 
 ## O que mudou
 
-- O codigo-fonte rastreado do ESP-CSI permanece igual ao repositorio original.
+- O exemplo csi_recv_router recebeu um modo de coleta em lotes com POST: o callback copia amostras, e uma tarefa separada pausa a captura, tenta um envio e retoma. A configuracao CSI de radio foi mantida. O modo serial original pode ser restaurado no menuconfig.
 - Foram criados sdkconfig.local.defaults e sdkconfig com o alvo esp32, Wi-Fi, CSI habilitado, console em 921600 baud e flash de 4 MB. O projeto ja trazia varias configuracoes de CSI e desempenho; elas foram aproveitadas.
 - O gerenciador de dependencias gerou dependencies.lock e managed_components.
 - A copia local do ESP-IDF recebeu um ajuste em tools/cmake/toolchain-esp32.cmake: chama os compiladores unificados diretamente, seleciona o perfil ESP32 e informa o caminho do Ninja. Isso evita a falha do intermediario que tentava consultar caminhos curtos no Windows.
@@ -70,6 +70,14 @@ Se aparecer `Project build complete`, grave:
 O comando flash tambem compila alteracoes pendentes. Ele substitui o programa da placa.
 Se a porta mudar, use `-Port COM8`, por exemplo.
 
+Se a gravacao parar no meio com `The chip stopped responding`, feche os monitores seriais, desconecte/reconecte a placa e tente uma porta USB direta, sem hub. Repita a gravacao completa em velocidade menor:
+
+```powershell
+.\outputs\ESP32.ps1 flash -Port COM7 -Baud 57600
+```
+
+O padrao continua sendo 115200 baud. A opcao -Baud afeta apenas a gravacao; o monitor e a captura CSV continuam usando 921600 baud. Se a falha persistir, teste outro cabo USB de dados e outra porta USB. Aguarde a conclusao da gravacao e da verificacao antes de iniciar o monitor; uma gravacao parcial nao confirma que o firmware esteja valido.
+
 Para acompanhar no terminal:
 
 ```powershell
@@ -86,9 +94,21 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\outputs\ESP32.ps1 buil
 
 Esse comando nao altera a politica permanente do computador. Troque build por flash, monitor ou menuconfig conforme a acao desejada.
 
+A mensagem `skip submodule check on internal CI` e informativa e vem do CMake. O ESP32.ps1 foi corrigido para nao interpretar texto de stderr como falha automatica: build e flash exibem os diagnosticos como texto e retornam o codigo de saida real do processo. A correcao foi testada no Windows PowerShell 5.1 e no PowerShell 7, tanto com sucesso quanto com uma falha simulada. Falhas reais continuam retornando codigo diferente de zero.
+
 Se o compilador nao iniciar e aparecer `WinError 623` ou `Realocacao Invalida da DLL do Sistema`, houve uma falha ao carregar a ferramenta no Windows antes de compilar o codigo. Essa falha foi observada ao executar pelo ambiente do Codex nas pastas antiga e nova. Tente o mesmo comando build num PowerShell aberto normalmente; a compilacao no novo local ainda precisa ser confirmada. Nao e necessario apagar os fontes nem gravar a placa para diagnosticar esse erro.
 
 ## Exemplo de alteracao
+
+### Cabecalho C++ bits/error_constants.h nao encontrado
+
+O arquivo faz parte da ferramenta Xtensa instalada. Se ele existir na instalacao mas o compilador nao conseguir encontra-lo, caminhos internos longos no Windows podem ser a causa. O script run_idf.py agora usa a juncao local `work/gcc-toolchain` para chamar a mesma ferramenta por um caminho menor, mantendo a selecao de bibliotecas ESP32 e os arquivos originais.
+
+A juncao e criada automaticamente pelo primeiro build no PowerShell normal e fica fora do Git. Se a criacao falhar por acesso negado, o build encerra sem alterar a instalacao. A configuracao anterior de build e preservada em uma pasta `work/csi-build-esp32-before-reconfigure-*` quando o caminho do compilador muda.
+
+Essa alteracao foi preparada em 29/10/2026. A compilacao completa ainda precisa ser confirmada no PowerShell normal, pois o ambiente de execucao do Codex apresentou erro de DLL ao iniciar o compilador e negou a criacao da juncao.
+
+### Alterar a frequencia de coleta
 
 Em app_main.c, a linha:
 
@@ -114,6 +134,8 @@ Nao e necessario repetir set-target esp32 a cada alteracao. Esse passo serve par
 O Arduino IDE pode ser usado como monitor serial. Este projeto e ESP-IDF/CMake, portanto o botao Upload do Arduino IDE nao compila este projeto diretamente.
 
 ## Coletar dados e salvar em CSV
+
+Com o novo modo de POST em lotes, a saida CSI_DATA fica desabilitada por padrao. Para usar a captura CSV abaixo, habilite **CSI batch POST > Also print each captured batch as CSV over serial** no menuconfig e compile/grave. As linhas chegam em rajadas entre as janelas; use local_timestamp para analisar os intervalos reais da coleta. Desabilitar CSI_BATCH_POST_ENABLED restaura a captura serial continua original.
 
 Nao e necessario recompilar nem gravar o ESP32 novamente para iniciar outra coleta. Mantenha a placa conectada por USB e conectada ao Wi-Fi configurado.
 
@@ -163,6 +185,50 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\outputs\Capturar-CSI.p
 Esse comando nao altera a politica permanente do computador. Tambem aceita `-Segundos 0` e `-Porta COM8`.
 
 Se nenhuma amostra for salva, confira a porta, feche os outros monitores seriais e verifique se o ESP32 esta conectado ao Wi-Fi configurado. Depois que a captura terminar, a porta e liberada e voce pode abrir o monitor novamente.
+
+## Coleta em lotes e envio POST
+
+No PowerShell, entre em `C:\Users\vitor\Documents\MO629A\mo629A\ESP32-CSI` e execute:
+
+```powershell
+.\outputs\ESP32.ps1 menuconfig
+```
+
+Abra **CSI batch POST**. Os padroes sao buffer de 200 amostras, janela maxima de 3000 ms e timeout de I/O do POST de 1000 ms. O ciclo pausa a coleta e os pings, faz no maximo uma tentativa de POST por lote e reutiliza o buffer tanto no sucesso quanto na falha. Nao ha reenvio nem persistencia de amostras em flash.
+
+A URL `https://example.invalid/csi` e um stub: o firmware descarta cada lote sem acessar a rede. Substitua a URL para testar o endpoint real. Para HTTPS, habilite o Certificate Bundle do mbedTLS e use um certificado confiavel. O backend recebe JSON com identificacao da placa/sessao/lote, timestamps, metadados e valores CSI brutos.
+
+Nesse mesmo menu, edite **Bearer token (value only, without Bearer prefix)** para configurar o token. Digite apenas seu valor, sem o prefixo Bearer. Cada POST tera o cabecalho `Authorization: Bearer <token>`; se o campo ficar vazio, esse cabecalho sera omitido. O endpoint precisa validar o token. Nao e necessario enviar o segredo no chat: ele fica no sdkconfig local, ignorado pelo Git, e no firmware compilado. Apos mudar URL ou token, salve, compile e grave novamente. O suporte ao token foi adicionado depois do primeiro build confirmado e precisa ser recompilado.
+
+Se aparecer `CONFIG_CSI_POST_TOKEN undeclared`, a configuracao gerada ainda e anterior a esse campo. Execute `reconfigure`, depois `menuconfig` para preencher URL/token, salve e execute `build`:
+
+```powershell
+.\outputs\ESP32.ps1 reconfigure
+.\outputs\ESP32.ps1 menuconfig
+.\outputs\ESP32.ps1 build
+```
+
+O CMake tambem foi configurado para acompanhar alteracoes no arquivo main/Kconfig.projbuild e regenerar a configuracao. Nao e necessario apagar sdkconfig nem repetir set-target para resolver esse erro.
+
+O timeout de 1000 ms nao garante uma pausa total de um segundo: DNS e TLS podem demorar mais. O monitor serial mostra samples, HTTP, sent, discarded, dropped, pause_ms e free_heap para medir o comportamento real. As pausas geram lacunas intencionais na coleta.
+
+O timeout agora e aplicado por fase: a conexao HTTPS nao consome o orcamento reservado para escrever o corpo, e a resposta recebe um novo timeout de I/O. O log POST failed informa stage (headers/connect/write/response/http_status), body_sent, connect_ms e elapsed_ms. Use essa linha para diagnosticar HTTP=0. POST completed indica que houve resposta HTTP 2xx. Essa correcao requer nova compilacao e gravacao; os resumos antigos sem stage nao permitem identificar precisamente a falha.
+
+O JSON foi alinhado ao contrato do endpoint: schema_version, device_id, session_id, batch_id e samples. Cada amostra contem seq, timestamp_us, ap_mac, rssi_dbm, noise_floor_dbm, channel, bandwidth_mhz, first_word_invalid e csi_raw. Contadores de diagnostico ficam apenas na serial.
+
+Para diagnosticar o envio parcial e as janelas vazias, o sdkconfig local foi ajustado para 20 amostras, timeout de 5000 ms e pings a 20 Hz, preservando URL e token. Os novos resumos incluem ping_tx, ping_rx e wifi. Uma resposta antecipada lida apos falha de escrita aparece como stage=early_response. Reconfigure, compile e grave para ativar esses ajustes; depois eles podem ser revistos para recuperar a velocidade desejada.
+
+Depois de salvar a configuracao:
+
+```powershell
+.\outputs\ESP32.ps1 build
+.\outputs\ESP32.ps1 flash
+.\outputs\ESP32.ps1 monitor
+```
+
+Detalhes do protocolo, limites e testes estao em `C:\Users\vitor\Documents\MO629A\mo629A\ESP32-CSI\work\esp-csi\examples\get-started\csi_recv_router\BATCH_POST.md`.
+
+Em 29/10/2026, o build no PowerShell normal do Windows gerou o firmware com o modo de lotes habilitado: 765440 bytes e 27% livres na particao de app. A compilacao esta confirmada; a execucao na placa e o POST para um endpoint real ainda nao foram testados. Nenhum novo firmware foi gravado nesta etapa. O compilador continua apresentando erro de DLL quando iniciado dentro do ambiente do Codex.
 
 ## Backup e arquivos de captura
 
