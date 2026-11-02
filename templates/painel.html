@@ -1,68 +1,43 @@
 {% extends "base.html" %}
 
 {% block hoje %}
-    <div class="hoje" aria-live="polite">
-      <strong id="hoje-total">0</strong>
-      <span>entradas hoje</span>
-    </div>
+<div class="hoje" aria-live="polite">
+  <strong><span class="ponto" id="presenca-ponto"></span><span id="presenca-valor">—</span></strong>
+  <span>há pessoas na sala?</span>
+</div>
 {% endblock %}
 
 {% block conteudo %}
-  <section class="painel" aria-labelledby="t-dia">
-    <div class="painel-topo">
-      <div>
-        <h2 id="t-dia">Entradas por dia</h2>
-        <p>Total de pessoas que entraram na sala em cada dia.</p>
-      </div>
-      <label>Período
-        <select id="periodo">
-          <option value="7">Últimos 7 dias</option>
-          <option value="14">Últimos 14 dias</option>
-          <option value="30" selected>Últimos 30 dias</option>
+<div id="config-api" data-api-base="{{ api_base }}" hidden></div>
+
+<p class="aviso-demo" id="aviso-demo" hidden>Modo demonstração: os dados abaixo são fictícios. Para ver os dados reais,
+  preencha o endereço da API no config.py.</p>
+
+<section class="painel" aria-labelledby="t-contagem">
+  <div class="painel-topo">
+    <div>
+      <h2 id="t-contagem">Pessoas na sala ao longo do dia</h2>
+      <p>Quantidade de pessoas na sala em cada momento do dia escolhido.</p>
+    </div>
+    <div class="controles">
+      <label>Escala
+        <select id="escala">
+          <option value="dados" selected>Ajustar aos dados</option>
+          <option value="fixa" id="opcao-fixa">Faixa fixa</option>
         </select>
       </label>
-    </div>
-    <div class="grafico"><canvas id="graf-dia" role="img" aria-label="Gráfico de barras com as entradas por dia"></canvas></div>
-  </section>
-
-  <section class="painel" aria-labelledby="t-hora">
-    <div class="painel-topo">
-      <div>
-        <h2 id="t-hora">Entradas por hora</h2>
-        <p>Pessoas que entraram em cada hora do dia escolhido.</p>
-      </div>
       <label>Dia
         <input type="date" id="dia">
       </label>
     </div>
-    <div class="grafico"><canvas id="graf-hora" role="img" aria-label="Gráfico de barras com as entradas por hora"></canvas></div>
-    <p class="vazio" id="vazio-hora" hidden>Nenhuma entrada registrada neste dia.</p>
-  </section>
+  </div>
+  <div class="grafico"><canvas id="graf-contagem" role="img"
+      aria-label="Gráfico de linha com a quantidade de pessoas na sala ao longo do dia"></canvas></div>
+  <p class="resumo" id="resumo"></p>
+  <p class="vazio" id="vazio" hidden>Nenhuma leitura neste dia.</p>
+</section>
 
-  <section class="painel" aria-labelledby="t-sinal">
-    <div class="painel-topo">
-      <div>
-        <h2 id="t-sinal">Sinal Wi-Fi do ESP32</h2>
-        <p>Força do sinal (RSSI) ao longo do dia. Quanto mais alto no gráfico (valor menos negativo), melhor o sinal; abaixo de uns -80 dBm ele já é fraco.</p>
-      </div>
-      <div class="controles">
-        <label>Escala
-          <select id="escala-sinal">
-            <option value="ajustar" selected>Ajustar aos dados</option>
-            <option value="dia">Dia inteiro (0h a 24h)</option>
-          </select>
-        </label>
-        <label>Dia
-          <input type="date" id="dia-sinal">
-        </label>
-      </div>
-    </div>
-    <div class="grafico"><canvas id="graf-sinal" role="img" aria-label="Gráfico de linha com o sinal Wi-Fi do ESP32 ao longo do dia"></canvas></div>
-    <p class="resumo" id="resumo-sinal"></p>
-    <p class="vazio" id="vazio-sinal" hidden>Nenhuma leitura de sinal neste dia.</p>
-  </section>
-
-  <p class="rodape" id="status">Carregando dados...</p>
+<p class="rodape" id="status">Carregando dados...</p>
 {% endblock %}
 
 {% block scripts %}

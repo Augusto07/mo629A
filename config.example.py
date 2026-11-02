@@ -1,10 +1,11 @@
-import os
+"""Modelo de configuração.
 
-# No computador (VS Code): o banco fica numa pasta ao lado do código.
-DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dados.db")
+Copie este arquivo para "config.py" e ajuste os valores.
+O config.py NÃO deve ir para o GitHub (já está no .gitignore).
+"""
 
-# No PythonAnywhere, use o caminho absoluto do seu usuário:
-# DB = "/home/SEU-USUARIO/dados.db"
-
-# Chave que o ESP32 envia no header X-API-Key.
-API_KEY = "troque-por-uma-chave-secreta"
+# Endereço base da API na AWS, sem barra no final. Por exemplo:
+# API_BASE_URL = "https://abc123.execute-api.sa-east-1.amazonaws.com/prod"
+#
+# Deixe vazio para ver o painel com dados de demonstração.
+API_BASE_URL = ""
