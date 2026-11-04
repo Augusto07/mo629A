@@ -4,8 +4,8 @@
 #include <stddef.h>
 
 #define CONFIG_CSI_BATCH_POST_ENABLED 1
-#define CONFIG_CSI_BATCH_MAX_SAMPLES 200
-#define CONFIG_CSI_BATCH_WINDOW_MS 3000
+#define CONFIG_CSI_BATCH_MAX_SAMPLES 20
+#define CONFIG_CSI_BATCH_BUFFER_COUNT 4
 #define CONFIG_CSI_BATCH_PING_HZ 100
 #define CONFIG_CSI_POST_TIMEOUT_MS 1000
 #define CONFIG_CSI_POST_URL "http://127.0.0.1/csi"
@@ -83,6 +83,7 @@ int xTaskCreate(void (*)(void *), const char *, uint32_t, void *, unsigned int, 
 void xTaskNotifyGive(TaskHandle_t);
 uint32_t ulTaskNotifyTake(int, uint32_t);
 void vTaskDelay(uint32_t);
+void vTaskDelete(TaskHandle_t);
 SemaphoreHandle_t xSemaphoreCreateBinary(void);
 int xSemaphoreGive(SemaphoreHandle_t);
 int xSemaphoreTake(SemaphoreHandle_t, uint32_t);

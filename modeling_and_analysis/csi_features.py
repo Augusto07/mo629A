@@ -59,17 +59,21 @@ def _periodicity(t, x, band, min_cycles):
 
 def extract_features(time_s, channel, bins=None, window_seconds=30.0,
                      hop_seconds=5.0, min_packets=12, max_gap_seconds=2.0,
-                     periodic_band=(0.1, 0.5), min_cycles=3):
+                     periodic_band=(0.1, 0.5), min_cycles=3,
+                     start_s=None, end_s=None):
     """Return one dict per complete window. Inadequate windows remain flagged.
 
     Pair indices retain original buffer positions. Invalid samples must already
     be NaN. Phase is uncalibrated; phase features are exploratory diagnostics.
+    Explicit start/end bounds support rolling buffers without shifting the
+    window grid to the first packet that happens to survive an upload gap.
     """
     t = np.asarray(time_s, dtype=float)
     h = np.asarray(channel, dtype=complex)
     if t.ndim != 1 or h.ndim != 2 or h.shape[0] != len(t):
         raise ValueError('Expected time (packets,) and channel (packets, bins).')
-    if len(t) < 2 or not np.all(np.isfinite(t)) or np.any(np.diff(t) < 0):
+    if ((len(t) < 2 and (start_s is None or end_s is None)) or
+            not np.all(np.isfinite(t)) or np.any(np.diff(t) < 0)):
         raise ValueError('At least two finite, nondecreasing timestamps required.')
     if window_seconds <= 0 or hop_seconds <= 0 or max_gap_seconds <= 0:
         raise ValueError('Window, hop, and maximum gap must be positive.')
@@ -85,8 +89,11 @@ def extract_features(time_s, channel, bins=None, window_seconds=30.0,
              'relative_phase_step_abs_median_rad', 'periodic_peak_hz',
              'periodic_explained_fraction']
     rows = []
-    start = float(t[0])
-    while start + window_seconds <= t[-1] + 1e-9:
+    start = float(t[0]) if start_s is None else float(start_s)
+    end = float(t[-1]) if end_s is None else float(end_s)
+    if not np.isfinite(start) or not np.isfinite(end) or end < start:
+        raise ValueError('Window bounds must be finite and nondecreasing.')
+    while start + window_seconds <= end + 1e-9:
         stop = start + window_seconds
         mask = (t >= start) & (t < stop)
         tw, hw = t[mask], h[mask]

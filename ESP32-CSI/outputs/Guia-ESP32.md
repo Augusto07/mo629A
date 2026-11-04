@@ -194,7 +194,9 @@ No PowerShell, entre em `C:\Users\vitor\Documents\MO629A\mo629A\ESP32-CSI` e exe
 .\outputs\ESP32.ps1 menuconfig
 ```
 
-Abra **CSI batch POST**. Os padroes sao buffer de 200 amostras, janela maxima de 3000 ms e timeout de I/O do POST de 1000 ms. O ciclo pausa a coleta e os pings, faz no maximo uma tentativa de POST por lote e reutiliza o buffer tanto no sucesso quanto na falha. Nao ha reenvio nem persistencia de amostras em flash.
+Abra **CSI batch POST**. Os novos padroes sao 20 amostras por POST, quatro buffers de RAM, 100 pings solicitados por segundo (frequencia anterior restaurada) e timeout de I/O de 1000 ms. Nao existe timer de coleta. CSI e pings continuam durante os envios; pausam somente quando todos os buffers estao ocupados e retomam quando um envio libera memoria. Cada lote tem uma tentativa, tanto em sucesso quanto em falha. Nao ha reenvio nem persistencia em flash; lotes parciais aguardam novas amostras.
+
+Execute reconfigure e confira `CSI_BATCH_MAX_SAMPLES=20`, `CSI_BATCH_BUFFER_COUNT=4` e `CSI_BATCH_PING_HZ=100` no menuconfig: um sdkconfig existente pode conservar valores anteriores. O antigo `CSI_BATCH_WINDOW_MS` foi removido. Preserve URL/token e configuracoes de Wi-Fi.
 
 A URL `https://example.invalid/csi` e um stub: o firmware descarta cada lote sem acessar a rede. Substitua a URL para testar o endpoint real. Para HTTPS, habilite o Certificate Bundle do mbedTLS e use um certificado confiavel. O backend recebe JSON com identificacao da placa/sessao/lote, timestamps, metadados e valores CSI brutos.
 
@@ -210,13 +212,15 @@ Se aparecer `CONFIG_CSI_POST_TOKEN undeclared`, a configuracao gerada ainda e an
 
 O CMake tambem foi configurado para acompanhar alteracoes no arquivo main/Kconfig.projbuild e regenerar a configuracao. Nao e necessario apagar sdkconfig nem repetir set-target para resolver esse erro.
 
-O timeout de 1000 ms nao garante uma pausa total de um segundo: DNS e TLS podem demorar mais. O monitor serial mostra samples, HTTP, sent, discarded, dropped, pause_ms e free_heap para medir o comportamento real. As pausas geram lacunas intencionais na coleta.
+O timeout de 1000 ms nao limita a duracao total do envio: DNS e TLS podem demorar mais. O monitor serial mostra queue, captured, sent_samples, discarded_samples, dropped, pauses, pause_ms, upload_ms e free_heap. pause_ms e a duracao acumulada de pausas por fila cheia. Se o envio for mais lento que a coleta, essas pausas geram lacunas reais.
 
 O timeout agora e aplicado por fase: a conexao HTTPS nao consome o orcamento reservado para escrever o corpo, e a resposta recebe um novo timeout de I/O. O log POST failed informa stage (headers/connect/write/response/http_status), body_sent, connect_ms e elapsed_ms. Use essa linha para diagnosticar HTTP=0. POST completed indica que houve resposta HTTP 2xx. Essa correcao requer nova compilacao e gravacao; os resumos antigos sem stage nao permitem identificar precisamente a falha.
 
 O JSON foi alinhado ao contrato do endpoint: schema_version, device_id, session_id, batch_id e samples. Cada amostra contem seq, timestamp_us, ap_mac, rssi_dbm, noise_floor_dbm, channel, bandwidth_mhz, first_word_invalid e csi_raw. Contadores de diagnostico ficam apenas na serial.
 
-Para diagnosticar o envio parcial e as janelas vazias, o sdkconfig local foi ajustado para 20 amostras, timeout de 5000 ms e pings a 20 Hz, preservando URL e token. Os novos resumos incluem ping_tx, ping_rx e wifi. Uma resposta antecipada lida apos falha de escrita aparece como stage=early_response. Reconfigure, compile e grave para ativar esses ajustes; depois eles podem ser revistos para recuperar a velocidade desejada.
+No diagnostico anterior, um sdkconfig local usou 20 amostras, timeout de 5000 ms e pings a 20 Hz. Esses valores sao historicos; o padrao atual foi restaurado para 100 Hz. Uma resposta antecipada apos falha de escrita continua aparecendo como stage=early_response.
+
+Para analisar os pequenos lotes em conjunto, use `modeling_and_analysis/csi_collection_inference.ipynb`. Edite `WINDOW_PROFILES` para escolher duracao, passo, minimo de pacotes e limite de lacunas, incluindo bordas. O perfil local inicial usa 1 segundo / passo de 0.2 segundo / 12 pacotes / lacuna maxima de 0.25 segundo; o perfil original de treinamento e comparado no mesmo notebook. As previsoes com novos parametros sao exploratorias ate validacao ou novo treinamento. Nenhum arquivo Lambda ou recurso AWS foi alterado.
 
 Depois de salvar a configuracao:
 

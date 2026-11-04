@@ -40,7 +40,7 @@ def parse_record(line):
         return None
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", default="COM4")
     parser.add_argument("--baud", type=int, default=921600)
@@ -50,7 +50,7 @@ def main():
     parser.add_argument("--output", type=Path,
                         default=Path(__file__).parent / "captures" /
                         (datetime.now().strftime("csi_%Y%m%d_%H%M%S") + ".csv"))
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if args.seconds <= 0 or args.wait <= 0:
         parser.error("--seconds and --wait must be positive")
 

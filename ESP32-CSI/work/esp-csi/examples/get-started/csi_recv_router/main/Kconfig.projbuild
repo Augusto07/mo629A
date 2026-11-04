@@ -1,6 +1,6 @@
 menu "CSI batch POST"
     config CSI_BATCH_POST_ENABLED
-        bool "Collect CSI in batches and POST while capture is paused"
+        bool "Collect CSI continuously and POST buffered batches"
         depends on IDF_TARGET_ESP32
         default y
 
@@ -23,12 +23,19 @@ menu "CSI batch POST"
         config CSI_BATCH_MAX_SAMPLES
             int "Maximum samples in one RAM buffer"
             range 1 400
-            default 200
+            default 20
+            help
+                Upload full batches only. There is no collection time limit.
+                Keep batches small enough for the receiver's payload limit.
 
-        config CSI_BATCH_WINDOW_MS
-            int "Maximum collection window (ms)"
-            range 100 60000
-            default 3000
+        config CSI_BATCH_BUFFER_COUNT
+            int "Number of RAM batch buffers (including capture and upload)"
+            range 2 8
+            default 4
+            help
+                Capture continues during uploads. When every buffer is full,
+                CSI and pings pause until an upload releases a buffer.
+                RAM use scales with this count times the maximum samples.
 
         config CSI_BATCH_PING_HZ
             int "Requested router pings per second"
@@ -53,7 +60,7 @@ menu "CSI batch POST"
             bool "Also print each captured batch as CSV over serial"
             default n
             help
-                Preserves the original CSV columns. Printing happens while
-                capture is paused and increases the gap between windows.
+                Preserves the original CSV columns. Printing uses the uploader
+                task and can fill the queue, causing a capture pause.
     endif
 endmenu

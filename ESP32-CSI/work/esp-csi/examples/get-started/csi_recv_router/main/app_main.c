@@ -33,7 +33,6 @@
 #include "ping/ping_sock.h"
 
 #include "protocol_examples_common.h"
-#include "esp_csi_gain_ctrl.h"
 #include "csi_batch.h"
 
 #if CONFIG_CSI_BATCH_POST_ENABLED
@@ -48,6 +47,7 @@
 
 #if CONFIG_IDF_TARGET_ESP32S3 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C5 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32C61
 #define CONFIG_GAIN_CONTROL                 1
+#include "esp_csi_gain_ctrl.h"
 #endif
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 0, 0)

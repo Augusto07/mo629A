@@ -19,7 +19,7 @@ headers = [
     'esp_random.h', 'esp_timer.h', 'esp_crt_bundle.h',
     'freertos/FreeRTOS.h', 'freertos/task.h', 'freertos/semphr.h',
 ]
-test_root = compiler.parent.parent / 'test-runs'
+test_root = here.parents[4] / 'host-tools/test-runs'
 test_root.mkdir(parents=True, exist_ok=True)
 with tempfile.TemporaryDirectory(prefix='csi-host-', dir=test_root) as temp:
     work = Path(temp)
@@ -42,24 +42,25 @@ with tempfile.TemporaryDirectory(prefix='csi-host-', dir=test_root) as temp:
         completed = subprocess.run([str(binary), str(result)], text=True, capture_output=True, check=True)
         records = [json.loads(line) for line in result.read_text().splitlines()]
         assert len(records) == 3
-        for batch, expected_count in zip(records, (200, 200, 17)):
+        for batch, expected_count in zip(records, (20, 20, 20)):
             assert set(batch) == {'schema_version', 'device_id', 'session_id', 'batch_id', 'samples'}
             assert len(batch['samples']) == expected_count
             for sample in batch['samples']:
                 assert set(sample) == {'seq', 'timestamp_us', 'ap_mac', 'rssi_dbm',
-                                       'noise_floor_dbm', 'channel', 'bandwidth_mhz',
+                                       'noise_floor_dbm', 'channel', 'bandwidth_mhz', 'sig_mode',
                                        'first_word_invalid', 'csi_raw'}
             assert all(len(s['csi_raw']) == 128 for s in batch['samples'])
             assert all(s['first_word_invalid'] is True for s in batch['samples'])
             assert all(s['bandwidth_mhz'] == 20 for s in batch['samples'])
+            assert all(s['sig_mode'] == 1 for s in batch['samples'])
         assert records[0]['device_id'] == 'dev"\\\n'
         assert records[0]['samples'][0]['timestamp_us'] == 5000000000
         assert records[0]['samples'][0]['csi_raw'][0] == -128
         assert records[0]['samples'][1]['csi_raw'][0] == 127
         if serial:
             lines = [line for line in completed.stdout.splitlines() if line.startswith('CSI_DATA,')]
-            assert len(lines) == 417
+            assert len(lines) == 2100
             for row in csv.reader(lines):
                 assert len(row) == 25 and len(json.loads(row[-1])) == int(row[-3]) == 128
         print(completed.stderr.strip())
-print('All host tests passed, including CSV enabled/disabled, partial writes and resume after POST failure.')
+print('All host tests passed: continuous capture, FIFO saturation/pause/resume, CSV, partial writes and failed-batch release.')

@@ -16,7 +16,7 @@ from sklearn.mixture import GaussianMixture
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-from csi_dataset import (assert_disjoint, attach_labels, exposure_seconds, load_annotations,
+from csi_dataset import (assert_disjoint, attach_labels, exposure_seconds, load_annotations, read_capture,
                          load_dataset, partition_dataset, quality_mask, select_features)
 from csi_models import (compare_classifiers, compare_unsupervised, cusum_trace,
                         run_change_models, save_bundle, predict_bundle, session_mean_interval)
@@ -43,6 +43,20 @@ def synthetic_frame(sessions=6, rows=40, seed=2):
 
 
 class DatasetTests(unittest.TestCase):
+    def test_signed_firmware_timestamps_and_uint32_wrap(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder)/'signed.csv'
+            with path.open('w', newline='') as stream:
+                writer = csv.DictWriter(stream, fieldnames=['type', 'len', 'first_word', 'local_timestamp', 'data'])
+                writer.writeheader()
+                for timestamp in [-2000000, -1000000, 0, 1000000]:
+                    writer.writerow(dict(type='CSI_DATA', len=4, first_word=0,
+                                         local_timestamp=timestamp, data='[1,2,3,4]'))
+            time, channel, meta = read_capture(path)
+            np.testing.assert_array_equal(time, [0, 1, 2, 3])
+            self.assertEqual(len(channel), 4)
+            self.assertEqual(meta['malformed_packets'], 0)
+
     def test_split_rejects_raw_overlap_and_groups(self):
         f = synthetic_frame(3)
         train = f.iloc[:10]

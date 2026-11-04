@@ -27,10 +27,24 @@ static const char *STUB_URL = "https://example.invalid/csi";
 static portMUX_TYPE s_lock = portMUX_INITIALIZER_UNLOCKED;
 static csi_batch_sample_t *s_samples;
 static TaskHandle_t s_task;
+static TaskHandle_t s_capture_task;
 static esp_ping_handle_t s_ping;
 static SemaphoreHandle_t s_ping_done;
 static bool s_collecting;
-static size_t s_count;
+static bool s_capture_running;
+typedef enum { BUFFER_FREE, BUFFER_FILLING, BUFFER_READY, BUFFER_SENDING } buffer_state_t;
+typedef struct {
+    buffer_state_t state;
+    size_t count;
+    csi_batch_meta_t meta;
+} batch_buffer_t;
+static batch_buffer_t s_buffers[CONFIG_CSI_BATCH_BUFFER_COUNT];
+static int s_active = -1;
+static size_t s_write_index = CONFIG_CSI_BATCH_BUFFER_COUNT - 1, s_read_index;
+static uint32_t s_next_batch_id, s_sent, s_discarded, s_pause_count;
+static uint64_t s_captured, s_sent_samples, s_discarded_samples;
+static int64_t s_pause_started_us;
+static uint64_t s_paused_us;
 static uint32_t s_seq, s_dropped_samples;
 static char s_device_id[18], s_session_id[33];
 
@@ -42,10 +56,12 @@ void csi_batch_ping_ended(void)
 void csi_batch_capture(const wifi_csi_info_t *info)
 {
     /* Called in the Wi-Fi task. Never wait, print, allocate or perform I/O here. */
-    bool full = false;
+    bool full = false, blocked = false;
     uint64_t now = (uint64_t)esp_timer_get_time();
     portENTER_CRITICAL(&s_lock);
     if (!s_collecting) {
+        /* Account for replies already in flight while the controller pauses. */
+        if (s_capture_running) { ++s_seq; ++s_dropped_samples; }
         portEXIT_CRITICAL(&s_lock);
         return;
     }
@@ -55,12 +71,8 @@ void csi_batch_capture(const wifi_csi_info_t *info)
         portEXIT_CRITICAL(&s_lock);
         return;
     }
-    if (s_count >= CONFIG_CSI_BATCH_MAX_SAMPLES) {
-        ++s_dropped_samples;
-        portEXIT_CRITICAL(&s_lock);
-        return;
-    }
-    csi_batch_sample_t *s = &s_samples[s_count];
+    batch_buffer_t *buffer = &s_buffers[s_active];
+    csi_batch_sample_t *s = &s_samples[(size_t)s_active * CONFIG_CSI_BATCH_MAX_SAMPLES + buffer->count];
     const wifi_pkt_rx_ctrl_t *r = &info->rx_ctrl;
     *s = (csi_batch_sample_t) {
         .timestamp_us = now, .seq = seq, .rx_timestamp_us = r->timestamp,
@@ -76,13 +88,33 @@ void csi_batch_capture(const wifi_csi_info_t *info)
     };
     memcpy(s->mac, info->mac, sizeof(s->mac));
     memcpy(s->data, info->buf, info->len);
-    ++s_count;
-    if (s_count == CONFIG_CSI_BATCH_MAX_SAMPLES) {
-        s_collecting = false;
+    if (!buffer->count) buffer->meta.window_started_us = now;
+    ++buffer->count;
+    ++s_captured;
+    if (buffer->count == CONFIG_CSI_BATCH_MAX_SAMPLES) {
+        buffer->meta = (csi_batch_meta_t) {
+            .device_id = s_device_id, .session_id = s_session_id,
+            .batch_id = s_next_batch_id++,
+            .window_started_us = buffer->meta.window_started_us, .window_ended_us = now,
+            .dropped_samples_total = s_dropped_samples,
+        };
+        buffer->state = BUFFER_READY;
+        size_t next = (s_write_index + 1) % CONFIG_CSI_BATCH_BUFFER_COUNT;
+        if (s_buffers[next].state == BUFFER_FREE) {
+            s_write_index = next;
+            s_active = (int)next;
+            s_buffers[next].count = 0;
+            s_buffers[next].state = BUFFER_FILLING;
+        } else {
+            s_active = -1;
+            s_collecting = false;
+            blocked = true;
+        }
         full = true;
     }
     portEXIT_CRITICAL(&s_lock);
     if (full) xTaskNotifyGive(s_task);
+    if (blocked && s_capture_task) xTaskNotifyGive(s_capture_task);
 }
 
 typedef struct {
@@ -132,7 +164,8 @@ static esp_err_t set_post_headers(esp_http_client_handle_t client)
     return esp_http_client_set_header(client, "Authorization", "Bearer " CONFIG_CSI_POST_TOKEN);
 }
 
-static bool post_batch(const csi_batch_meta_t *meta, size_t count, int *status)
+static bool post_batch(const csi_batch_meta_t *meta, const csi_batch_sample_t *samples,
+                       size_t count, int *status)
 {
     *status = 0;
     if (strcmp(CONFIG_CSI_POST_URL, STUB_URL) == 0) {
@@ -151,7 +184,7 @@ static bool post_batch(const csi_batch_meta_t *meta, size_t count, int *status)
     }
 #endif
     size_t body_size = 0;
-    if (!csi_batch_json(meta, s_samples, count, NULL, NULL, &body_size) || body_size > INT_MAX) {
+    if (!csi_batch_json(meta, samples, count, NULL, NULL, &body_size) || body_size > INT_MAX) {
         ESP_LOGE(TAG, "could not encode batch");
         return false;
     }
@@ -190,7 +223,7 @@ static bool post_batch(const csi_batch_meta_t *meta, size_t count, int *status)
     stage = "write";
     sink.deadline_us = esp_timer_get_time() + (int64_t)CONFIG_CSI_POST_TIMEOUT_MS * 1000;
     size_t emitted = 0;
-    if (!csi_batch_json(meta, s_samples, count, http_write, &sink, &emitted) || emitted != body_size) {
+    if (!csi_batch_json(meta, samples, count, http_write, &sink, &emitted) || emitted != body_size) {
         error = sink.error != ESP_OK ? sink.error : ESP_FAIL;
         /* An API gateway may reject headers/authentication before consuming
          * the full body. Probe that response on the same request, never retry. */
@@ -237,7 +270,7 @@ done:
 }
 
 #if CONFIG_CSI_BATCH_SERIAL_OUTPUT
-static void print_csv(size_t count)
+static void print_csv(const csi_batch_sample_t *samples, size_t count)
 {
     static bool header_printed;
     if (!header_printed) {
@@ -245,7 +278,7 @@ static void print_csv(size_t count)
         header_printed = true;
     }
     for (size_t i = 0; i < count; ++i) {
-        const csi_batch_sample_t *s = &s_samples[i];
+        const csi_batch_sample_t *s = &samples[i];
         printf("CSI_DATA,%" PRIu32 "," MACSTR ",%d,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%d,%u,%u,%u,%" PRIu32 ",%u,%u,%u,%u,%u,\"[",
                s->seq, MAC2STR(s->mac), s->rssi, s->rate, s->sig_mode, s->mcs, s->cwb,
                s->smoothing, s->not_sounding, s->aggregation, s->stbc, s->fec_coding, s->sgi,
@@ -257,75 +290,136 @@ static void print_csv(size_t count)
 }
 #endif
 
+/* Only this task controls CSI/pings. Neither the callback nor HTTP can block it. */
+static bool capture_control_step(void)
+{
+    portENTER_CRITICAL(&s_lock);
+    if (s_active < 0) {
+        size_t next = (s_write_index + 1) % CONFIG_CSI_BATCH_BUFFER_COUNT;
+        if (s_buffers[next].state == BUFFER_FREE) {
+            s_write_index = next;
+            s_active = (int)next;
+            s_buffers[next].count = 0;
+            s_buffers[next].state = BUFFER_FILLING;
+        }
+    }
+    bool wanted = s_active >= 0;
+    bool running = s_capture_running;
+    s_collecting = wanted && running;
+    portEXIT_CRITICAL(&s_lock);
+    if (wanted && !running) {
+        (void)xSemaphoreTake(s_ping_done, 0);
+        esp_err_t csi_error = esp_wifi_set_csi(true);
+        esp_err_t ping_error = csi_error == ESP_OK ? esp_ping_start(s_ping) : csi_error;
+        if (csi_error != ESP_OK || ping_error != ESP_OK) {
+            (void)esp_wifi_set_csi(false);
+            ESP_LOGE(TAG, "capture start failed: CSI=%s ping=%s; retrying control only",
+                     esp_err_to_name(csi_error), esp_err_to_name(ping_error));
+            return false;
+        }
+        int64_t resumed = esp_timer_get_time();
+        portENTER_CRITICAL(&s_lock);
+        s_capture_running = true;
+        s_collecting = true;
+        if (s_pause_started_us) {
+            s_paused_us += (uint64_t)(resumed - s_pause_started_us);
+            s_pause_started_us = 0;
+        }
+        portEXIT_CRITICAL(&s_lock);
+    } else if (!wanted && running) {
+        int64_t paused = esp_timer_get_time();
+        esp_err_t stop_error = esp_ping_stop(s_ping);
+        esp_err_t csi_error = esp_wifi_set_csi(false);
+        if (stop_error == ESP_OK) (void)xSemaphoreTake(s_ping_done, portMAX_DELAY);
+        portENTER_CRITICAL(&s_lock);
+        s_capture_running = false;
+        s_pause_started_us = paused;
+        ++s_pause_count;
+        portEXIT_CRITICAL(&s_lock);
+        ESP_LOGW(TAG, "RAM queue full: capture paused until a buffer is released");
+        if (stop_error != ESP_OK || csi_error != ESP_OK) {
+            ESP_LOGE(TAG, "capture stop failed: ping=%s CSI=%s",
+                     esp_err_to_name(stop_error), esp_err_to_name(csi_error));
+        }
+    }
+    return true;
+}
+
+static void capture_task(void *unused)
+{
+    (void)unused;
+    for (;;) {
+        bool ok = capture_control_step();
+        (void)ulTaskNotifyTake(pdTRUE, ok ? portMAX_DELAY : pdMS_TO_TICKS(100));
+    }
+}
+
+/* A READY/SENDING buffer is immutable until this uploader releases it. */
+static bool upload_next_batch(void)
+{
+    portENTER_CRITICAL(&s_lock);
+    size_t index = s_read_index;
+    batch_buffer_t *buffer = &s_buffers[index];
+    if (buffer->state != BUFFER_READY) {
+        portEXIT_CRITICAL(&s_lock);
+        return false;
+    }
+    buffer->state = BUFFER_SENDING;
+    size_t count = buffer->count;
+    csi_batch_meta_t meta = buffer->meta;
+    portEXIT_CRITICAL(&s_lock);
+    const csi_batch_sample_t *samples = &s_samples[index * CONFIG_CSI_BATCH_MAX_SAMPLES];
+    int status = 0;
+    int64_t started = esp_timer_get_time();
+#if CONFIG_CSI_BATCH_SERIAL_OUTPUT
+    print_csv(samples, count);
+#endif
+    bool sent = post_batch(&meta, samples, count, &status);
+    uint64_t upload_ms = (uint64_t)(esp_timer_get_time() - started) / 1000;
+    if (sent) { ++s_sent; s_sent_samples += count; }
+    else { ++s_discarded; s_discarded_samples += count; }
+    portENTER_CRITICAL(&s_lock);
+    buffer->count = 0;
+    buffer->state = BUFFER_FREE;
+    s_read_index = (index + 1) % CONFIG_CSI_BATCH_BUFFER_COUNT;
+    unsigned int queued = 0;
+    for (size_t i = 0; i < CONFIG_CSI_BATCH_BUFFER_COUNT; ++i) {
+        if (s_buffers[i].state == BUFFER_READY || s_buffers[i].state == BUFFER_SENDING) ++queued;
+    }
+    uint64_t captured = s_captured;
+    uint32_t dropped = s_dropped_samples, pauses = s_pause_count;
+    uint64_t paused_us = s_paused_us;
+    if (s_pause_started_us) paused_us += (uint64_t)(esp_timer_get_time() - s_pause_started_us);
+    portEXIT_CRITICAL(&s_lock);
+    xTaskNotifyGive(s_capture_task);
+    uint32_t ping_tx = 0, ping_rx = 0;
+    (void)esp_ping_get_profile(s_ping, ESP_PING_PROF_REQUEST, &ping_tx, sizeof(ping_tx));
+    (void)esp_ping_get_profile(s_ping, ESP_PING_PROF_REPLY, &ping_rx, sizeof(ping_rx));
+    wifi_ap_record_t ap;
+    bool wifi = esp_wifi_sta_get_ap_info(&ap) == ESP_OK;
+    ESP_LOGI(TAG, "batch=%" PRIu32 " samples=%u HTTP=%d queue=%u/%u captured=%" PRIu64
+             " sent=%" PRIu32 " sent_samples=%" PRIu64 " discarded=%" PRIu32
+             " discarded_samples=%" PRIu64 " dropped=%" PRIu32 " pauses=%" PRIu32
+             " pause_ms=%" PRIu64 " upload_ms=%" PRIu64 " ping_tx=%" PRIu32 " ping_rx=%" PRIu32
+             " wifi=%u free_heap=%u",
+             meta.batch_id, (unsigned int)count, status, queued, (unsigned int)CONFIG_CSI_BATCH_BUFFER_COUNT,
+             captured, s_sent, s_sent_samples, s_discarded, s_discarded_samples, dropped, pauses,
+             paused_us / 1000, upload_ms, ping_tx, ping_rx, (unsigned int)wifi,
+             (unsigned int)heap_caps_get_free_size(MALLOC_CAP_8BIT));
+    return true;
+}
+
 static void batch_task(void *unused)
 {
     (void)unused;
-    uint32_t batch_id = 0, sent = 0, discarded = 0;
     for (;;) {
-        /* A notification from a completed previous window must not close this one. */
-        (void)ulTaskNotifyTake(pdTRUE, 0);
-        (void)xSemaphoreTake(s_ping_done, 0);
-        uint64_t started = (uint64_t)esp_timer_get_time();
-        portENTER_CRITICAL(&s_lock);
-        s_count = 0;
-        s_collecting = true;
-        portEXIT_CRITICAL(&s_lock);
-        esp_err_t csi_error = esp_wifi_set_csi(true);
-        esp_err_t ping_error = csi_error == ESP_OK ? esp_ping_start(s_ping) : csi_error;
-        if (csi_error == ESP_OK && ping_error == ESP_OK) {
-            (void)ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(CONFIG_CSI_BATCH_WINDOW_MS));
-        }
-        portENTER_CRITICAL(&s_lock);
-        s_collecting = false;
-        size_t count = s_count;
-        uint32_t dropped = s_dropped_samples;
-        portEXIT_CRITICAL(&s_lock);
-        uint64_t ended = (uint64_t)esp_timer_get_time();
-        /* In-flight ping replies may still arrive; capture already rejects them. */
-        esp_err_t stop_error = esp_ping_stop(s_ping);
-        esp_err_t disable_error = esp_wifi_set_csi(false);
-        if (csi_error == ESP_OK && ping_error == ESP_OK && stop_error == ESP_OK) {
-            /* Wait for the ping task to finish its in-flight receive (100 ms timeout).
-             * Never restart the session or POST while the old ping loop is active. */
-            (void)xSemaphoreTake(s_ping_done, portMAX_DELAY);
-        }
-        uint32_t ping_tx = 0, ping_rx = 0;
-        (void)esp_ping_get_profile(s_ping, ESP_PING_PROF_REQUEST, &ping_tx, sizeof(ping_tx));
-        (void)esp_ping_get_profile(s_ping, ESP_PING_PROF_REPLY, &ping_rx, sizeof(ping_rx));
-        if (csi_error != ESP_OK || ping_error != ESP_OK || stop_error != ESP_OK || disable_error != ESP_OK) {
-            ESP_LOGE(TAG, "capture control error: CSI=%s ping=%s stop=%s disable=%s",
-                     esp_err_to_name(csi_error), esp_err_to_name(ping_error),
-                     esp_err_to_name(stop_error), esp_err_to_name(disable_error));
-        }
-        csi_batch_meta_t meta = {
-            .device_id = s_device_id, .session_id = s_session_id, .batch_id = batch_id++,
-            .window_started_us = started, .window_ended_us = ended,
-            .dropped_samples_total = dropped, .discarded_batches_total = discarded,
-        };
-        int status = 0;
-        if (count) {
-#if CONFIG_CSI_BATCH_SERIAL_OUTPUT
-            print_csv(count);
-#endif
-            if (post_batch(&meta, count, &status)) ++sent;
-            else ++discarded;
-        }
-        wifi_ap_record_t ap;
-        bool wifi_associated = esp_wifi_sta_get_ap_info(&ap) == ESP_OK;
-        ESP_LOGI(TAG, "batch=%" PRIu32 " samples=%u ping_tx=%" PRIu32 " ping_rx=%" PRIu32 " wifi=%u HTTP=%d sent=%" PRIu32
-                 " discarded=%" PRIu32 " dropped=%" PRIu32 " pause_ms=%" PRIu64 " free_heap=%u",
-                 meta.batch_id, (unsigned int)count, ping_tx, ping_rx, (unsigned int)wifi_associated,
-                 status, sent, discarded, dropped,
-                 ((uint64_t)esp_timer_get_time() - ended) / 1000,
-                 (unsigned int)heap_caps_get_free_size(MALLOC_CAP_8BIT));
-        /* Reuse the allocation on the next window, even if delivery failed. */
-        if (!count || csi_error != ESP_OK || ping_error != ESP_OK) vTaskDelay(pdMS_TO_TICKS(100));
+        if (!upload_next_batch()) (void)ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
     }
 }
 
 esp_err_t csi_batch_start(esp_ping_handle_t ping)
 {
-    if (!ping || s_samples || s_task) return ESP_ERR_INVALID_STATE;
+    if (!ping || s_samples || s_task || s_capture_task) return ESP_ERR_INVALID_STATE;
     uint8_t mac[6];
     esp_err_t error = esp_read_mac(mac, ESP_MAC_WIFI_STA);
     if (error != ESP_OK) return error;
@@ -334,9 +428,10 @@ esp_err_t csi_batch_start(esp_ping_handle_t ping)
     esp_fill_random(random, sizeof(random));
     snprintf(s_session_id, sizeof(s_session_id), "%08" PRIx32 "%08" PRIx32 "%08" PRIx32 "%08" PRIx32,
              random[0], random[1], random[2], random[3]);
-    s_samples = calloc(CONFIG_CSI_BATCH_MAX_SAMPLES, sizeof(*s_samples));
+    size_t capacity = (size_t)CONFIG_CSI_BATCH_MAX_SAMPLES * CONFIG_CSI_BATCH_BUFFER_COUNT;
+    s_samples = calloc(capacity, sizeof(*s_samples));
     if (!s_samples) {
-        ESP_LOGE(TAG, "cannot allocate %u bytes for samples", (unsigned int)(CONFIG_CSI_BATCH_MAX_SAMPLES * sizeof(*s_samples)));
+        ESP_LOGE(TAG, "cannot allocate %u bytes for samples", (unsigned int)(capacity * sizeof(*s_samples)));
         return ESP_ERR_NO_MEM;
     }
     s_ping_done = xSemaphoreCreateBinary();
@@ -346,7 +441,9 @@ esp_err_t csi_batch_start(esp_ping_handle_t ping)
         return ESP_ERR_NO_MEM;
     }
     s_ping = ping;
-    if (xTaskCreate(batch_task, "csi_batch", 8192, NULL, 4, &s_task) != pdPASS) {
+    if (xTaskCreate(batch_task, "csi_upload", 8192, NULL, 4, &s_task) != pdPASS ||
+        xTaskCreate(capture_task, "csi_capture", 3072, NULL, 5, &s_capture_task) != pdPASS) {
+        if (s_task) vTaskDelete(s_task);
         free(s_samples);
         vSemaphoreDelete(s_ping_done);
         s_ping_done = NULL;
@@ -354,9 +451,9 @@ esp_err_t csi_batch_start(esp_ping_handle_t ping)
         s_task = NULL;
         return ESP_ERR_NO_MEM;
     }
-    ESP_LOGI(TAG, "RAM buffer=%u bytes capacity=%u window_ms=%u ping_hz=%u timeout_ms=%u; no delivery retries",
-             (unsigned int)(CONFIG_CSI_BATCH_MAX_SAMPLES * sizeof(*s_samples)),
-             (unsigned int)CONFIG_CSI_BATCH_MAX_SAMPLES, (unsigned int)CONFIG_CSI_BATCH_WINDOW_MS,
+    ESP_LOGI(TAG, "RAM buffers=%u bytes batch_samples=%u buffers=%u ping_hz=%u timeout_ms=%u; no collection timer; no delivery retries",
+             (unsigned int)(capacity * sizeof(*s_samples)),
+             (unsigned int)CONFIG_CSI_BATCH_MAX_SAMPLES, (unsigned int)CONFIG_CSI_BATCH_BUFFER_COUNT,
              (unsigned int)CONFIG_CSI_BATCH_PING_HZ,
              (unsigned int)CONFIG_CSI_POST_TIMEOUT_MS);
     return ESP_OK;

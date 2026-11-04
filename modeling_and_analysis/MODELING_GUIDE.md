@@ -1,5 +1,44 @@
 # Running and modifying the CSI models
 
+## Continuous collection in small uploads
+
+The repository firmware requests 100 Hz (restored original default), captures during uploads, and pauses
+only when its bounded RAM queue fills. Upload batches default to 20 samples.
+No collection timer is used; failed uploads get one attempt and are discarded.
+
+Use `csi_collection_inference.ipynb` for exported collection records. The shared
+local `collection_pipeline.py` decodes the CSV, preserves 64-bit acquisition
+timestamps, and buffers packets across batches into configurable windows. Edit
+`WINDOW_PROFILES` and `ACTIVE_PROFILE` in the notebook: the local default follows
+the selected model's training settings. The exploratory short profile uses a
+1-second window, 0.2-second hop, 12-packet minimum and 0.25-second maximum gap,
+including edges. All four values may be overridden through
+`predict_collection_batches(batches, model, parameters=...)` or
+`CaptureWindowBuffer(model, parameters=...)`. Minimum packet count must be at
+least 3; time settings must be positive and representable in whole microseconds.
+
+The pipeline isolates sessions/radio formats and reports unfinished trailing
+windows. Receipt time does not replace acquisition time. Inference does not
+refit coefficients. Results with modified settings carry
+`inference_mode=exploratory_window_override`; changing coverage does not establish
+accuracy under the new observation duration. Validate or retrain before relying
+on those assignments. Each report records actual parameters and training settings.
+
+The Lambda adapter now normalizes collector bandwidth units, preserves PHY mode
+and 64-bit acquisition clocks, and reports incompatible captures in `capture_issues`.
+Use the exporter's `--lambda-template lambda-function.py --output lambda-function.py`
+options to update its embedded weights while retaining the AWS integration.
+It still requires a complete window within one invocation; it does not persist
+packets between invocations. Missing `sig_mode` is unverified, not assumed to be
+the trained mode. The firmware source now includes this field in JSON uploads;
+existing device firmware must be updated before it can transmit the added field.
+
+Run `python -m unittest test_collection_pipeline.py` for the new local checks.
+The historical occupied-pair model produced 55 accepted windows on the reference
+CSV at `E:\Downloads\results (1).csv` using the short profile. A newly selected
+format-specific model can reject that export if its radio format differs or
+its PHY mode is not provided. Missing observation time is never imputed.
+
 Use the ESP-IDF Python interpreter:
 
 ```text
@@ -146,10 +185,10 @@ poor quality; `frozen_change_trace` applies a saved reference without updating i
 
 ## Verification
 
-From this example directory, using the ESP-IDF interpreter:
+From this modeling directory, using the ESP-IDF interpreter:
 
 ```powershell
-python -m unittest test_csi_features.py test_csi_modeling.py
+python -m unittest test_csi_features.py test_csi_modeling.py test_standalone_gmm.py
 python -m pip check
 ```
 
@@ -157,3 +196,66 @@ Tests cover timestamp/interval leakage, causal long-window joins, synthetic
 distribution shifts, CUSUM resets, label rejection, grouped classification,
 training-only transforms, model save/load, and feature-order preservation.
 Synthetic tests exercise implementation; they are not real occupancy validation.
+
+## Current occupied-pair experiment and frozen inference
+
+`csi_unsupervised_20261025.ipynb` uses the separate manifest in
+`experiments/occupied_pair_20261025/`, with the first 60% of each recording for
+training, the next 20% for validation, and purges at boundaries. Both recordings
+are occupied; counts and interval-level occupancy labels are unknown. The final
+20% remains locked. The selected `gmm_2_tied` has two components with shared
+covariance. See that experiment's `RESULTS.md` for sampling acceptance and
+selection metrics. Its state IDs have no occupancy/count interpretation.
+
+The loader recovers valid signed representations of the firmware's uint32
+microsecond counter before unwrapping. Clock resets/out-of-order packets and
+mixed capture formats still require separate captures. The regression suite
+covers signed timestamps and counter wrap.
+
+`standalone_gmm.py` embeds the saved preprocessing and fitted coefficients;
+inference needs NumPy, with no sklearn or joblib dependency. It accepts raw CSI
+or features from CSV, JSON, JSONL, or Python dictionaries/lists through
+`predict_input(source, kind='auto')`. Raw packets use `data`, `local_timestamp`,
+`len`, and `first_word`; feature rows use the names in `FEATURES`. Quality-failing
+windows retain an unknown state. Use `--kind raw` or `--kind features` to specify
+the input schema explicitly:
+
+```powershell
+python standalone_gmm.py captures/csi_20261025_200543.csv --kind raw --output predictions.json
+```
+
+`export_gmm.py` writes a new standalone inference model from a fitted bundle
+explicitly selected from analysis results. It no longer chooses a bundle by
+filename order or assumes the old occupied-pair experiment. First fit/compare
+models using the desired extraction settings, then save the selected result
+with `save_bundle`, recording those settings in `metadata['fast_parameters']`.
+
+```powershell
+python export_gmm.py path/to/selected.joblib --features path/to/features_and_splits.csv --output models/selected_gmm.py
+```
+
+Or call `export_gmm(bundle_path, output_path, feature_frame=results_frame)` from
+Python. The feature frame/CSV is optional; missing-value/extreme-value probes
+are always checked. Repeat `--raw-capture path/to/capture.csv` to additionally
+verify raw feature extraction. Tied, diagonal, full and spherical covariance
+are supported with fitted median imputation, variance filtering and scaling.
+
+The new module embeds the selected coefficients, feature order, preprocessing,
+training window settings and source-bundle hash. The exporter verifies NumPy
+transforms, predictions, probabilities and likelihood against sklearn before
+replacing the output. A separate `<output_stem>_verification.json` is written
+beside each artifact. No fitting happens during export. The collection notebook
+has an optional export cell, and `MODEL_FILENAME` selects the artifact used for
+inference. A newly trained short-window bundle makes its matching short-window
+settings the inference defaults; the old model need not remain the selected one.
+Lambda and historical inference artifacts are not changed by preparing this workflow.
+
+The current collector sends encrypted envelopes. The model consumes decrypted
+inner records, not the encrypted payload. `lambda-function.py` converts inner
+`samples` entries (`csi_raw`, `timestamp_us`, and radio metadata) to raw model
+packets and groups them by device/session/link/format within the invocation.
+For Lambda packaging, name the module `lambda_function.py` and configure
+`lambda_function.lambda_handler`. The separate `lambda-function copy.py`
+variant expects raw packet rows or feature records. Neither variant stores a
+rolling packet buffer across invocations, so short batches can produce no
+5-second windows. Serial capture requires enabling collector serial output.

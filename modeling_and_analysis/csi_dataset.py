@@ -37,28 +37,43 @@ def read_capture(path):
                     raise ValueError('Noninteger data')
                 if len(values) < 2 or len(values) % 2 or len(values) != int(row['len']):
                     raise ValueError('Bad length')
-                stamp, invalid = int(row['local_timestamp']), int(row['first_word'])
-                if not 0 <= stamp < 2**32 or invalid not in (0, 1):
+                collector_clock = 'timestamp_us' in row
+                stamp = int(row['timestamp_us'] if collector_clock else row['local_timestamp'])
+                invalid = int(row['first_word'])
+                # Firmware prints the uint32 microsecond counter with %d, so
+                # valid counters above INT32_MAX may appear as signed negatives.
+                valid_stamp = (0 <= stamp < 2**63 if collector_clock
+                               else -(2**31) <= stamp < 2**32)
+                if not valid_stamp or invalid not in (0, 1):
                     raise ValueError('Bad metadata')
+                if not collector_clock:
+                    stamp = stamp % (2**32)
                 group = (row.get('mac'), row.get('channel'), row.get('sig_mode', row.get('rx_format')),
                          row.get('bandwidth'), len(values))
-                records.append((stamp, invalid, values, group))
+                records.append((stamp, invalid, values, group, collector_clock))
             except (ValueError, KeyError, TypeError):
                 malformed += 1
     if len(records) < 2:
         raise ValueError(f'{path}: fewer than two valid packets')
     if len({r[3] for r in records}) != 1:
         raise ValueError(f'{path}: multiple links/channels/formats; split into separate captures')
+    if len({r[4] for r in records}) != 1:
+        raise ValueError('Mixed collector and driver timestamp clocks; split captures first')
     stamps = np.array([r[0] for r in records], dtype=np.int64)
     delta = np.diff(stamps)
-    delta = np.where(delta < -(2**31), delta + 2**32, delta)
+    if not records[0][4]:
+        delta = np.where(delta < -(2**31), delta + 2**32, delta)
     if np.any(delta < 0):
         raise ValueError(f'{path}: clock reset/out-of-order packets; split sessions first')
     time = np.r_[0, np.cumsum(delta)] / 1e6
     raw = np.asarray([r[2] for r in records], dtype=float)
     channel = raw[:, 1::2] + 1j * raw[:, 0::2]
     channel[np.array([bool(r[1]) for r in records]), :2] = complex(np.nan, np.nan)
-    metadata = dict(source_mac=records[0][3][0], channel=records[0][3][1],
+    timestamps = [int(stamps[0])]
+    for step in delta:
+        timestamps.append(timestamps[-1] + int(step))
+    metadata = dict(sample_timestamps_us=timestamps,
+                    source_mac=records[0][3][0], channel=records[0][3][1],
                     format=str(records[0][3][2:]), malformed_packets=malformed)
     return time, channel, metadata
 
@@ -141,6 +156,7 @@ def load_dataset(manifest_path, labels_path=None, fast_params=None, slow_params=
             raise ValueError('The same capture cannot appear in multiple sessions')
         paths.add(capture)
         time, channel, meta = read_capture(capture)
+        meta.pop('sample_timestamps_us')
         fast = extract_features(time, channel, **fast_config)
         slow = extract_features(time, channel, **slow_config)
         for row in fast:

@@ -6,6 +6,9 @@
 #include <string.h>
 
 static bool append(char *buf, size_t capacity, size_t *used, const char *fmt, ...)
+    __attribute__((format(printf, 4, 5)));
+
+static bool append(char *buf, size_t capacity, size_t *used, const char *fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
@@ -64,11 +67,12 @@ bool csi_batch_json(const csi_batch_meta_t *meta, const csi_batch_sample_t *samp
         if (!append(buf, sizeof(buf), &used,
                 "%s{\"seq\":%" PRIu32 ",\"timestamp_us\":%" PRIu64 ","
                 "\"ap_mac\":\"%02x:%02x:%02x:%02x:%02x:%02x\","
-                "\"rssi_dbm\":%d,\"noise_floor_dbm\":%d,\"channel\":%u,\"bandwidth_mhz\":%u,"
+                "\"rssi_dbm\":%d,\"noise_floor_dbm\":%d,\"channel\":%u,\"bandwidth_mhz\":%u,\"sig_mode\":%u,"
                 "\"first_word_invalid\":%s,\"csi_raw\":[",
                 i ? "," : "", s->seq, s->timestamp_us,
                 s->mac[0], s->mac[1], s->mac[2], s->mac[3], s->mac[4], s->mac[5],
                 s->rssi, s->noise_floor, (unsigned int)s->channel, s->cwb ? 40U : 20U,
+                (unsigned int)s->sig_mode,
                 s->first_word_invalid ? "true" : "false")) return false;
         for (size_t j = 0; j < s->len; ++j) {
             if (!append(buf, sizeof(buf), &used, "%s%d", j ? "," : "", s->data[j])) return false;
