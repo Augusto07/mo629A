@@ -1,46 +1,154 @@
 {% extends "base.html" %}
 
-{% block hoje %}
-<div class="hoje" aria-live="polite">
-  <strong><span class="ponto" id="presenca-ponto"></span><span id="presenca-valor">—</span></strong>
-  <span>há pessoas na sala?</span>
-</div>
-{% endblock %}
-
 {% block conteudo %}
-<div id="config-api" data-api-base="{{ api_base }}" hidden></div>
 
-<p class="aviso-demo" id="aviso-demo" hidden>Modo demonstração: os dados abaixo são fictícios. Para ver os dados reais,
-  preencha o endereço da API no config.py.</p>
+<div id="config-api" data-api-enabled="{{ 'true' if api_configurada else 'false' }}" hidden>
+</div>
 
-<section class="painel" aria-labelledby="t-contagem">
+<p class="aviso-demo" id="aviso-demo" hidden>
+  Modo demonstração: os dados abaixo são fictícios. Para ver os dados reais,
+  configure a API_BASE_URL e o API_TOKEN no servidor.
+</p>
+
+<section class="painel" aria-labelledby="t-presenca">
+
   <div class="painel-topo">
     <div>
-      <h2 id="t-contagem">Pessoas na sala ao longo do dia</h2>
-      <p>Quantidade de pessoas na sala em cada momento do dia escolhido.</p>
+      <h2 id="t-presenca">Presença na sala por dia e horário</h2>
+
+      <p>
+        Situação da sala em cada horário de cada dia do período selecionado.
+      </p>
     </div>
-    <div class="controles">
-      <label>Escala
-        <select id="escala">
-          <option value="dados" selected>Ajustar aos dados</option>
-          <option value="fixa" id="opcao-fixa">Faixa fixa</option>
+
+    <div class="controles-painel">
+
+      <label>
+        Período
+
+        <select id="periodo">
+          <option value="7">Últimos 7 dias</option>
+          <option value="15" selected>Últimos 15 dias</option>
         </select>
       </label>
-      <label>Dia
-        <input type="date" id="dia">
-      </label>
+
+      <!-- CONTROLE DE CONEXÃO COM A API -->
+      <div class="acoes-painel" id="controle-api">
+
+        <span class="status-conexao" id="status-conexao">
+          Desconectado da API
+        </span>
+
+        <button type="button" class="botao-api" id="btn-conexao-api" aria-pressed="false">
+          Conectar à API
+        </button>
+
+      </div>
+
     </div>
   </div>
-  <div class="grafico"><canvas id="graf-contagem" role="img"
-      aria-label="Gráfico de linha com a quantidade de pessoas na sala ao longo do dia"></canvas></div>
+
+  <!-- CARDS DE INDICADORES -->
+  <section class="cards-indicadores" aria-label="Resumo de presença">
+
+    <!-- PRESENÇA ATUAL -->
+    <article class="card-indicador">
+      <div class="card-indicador-topo">
+        <span class="card-indicador-titulo">Presença atual</span>
+        <span class="card-indicador-icone">●</span>
+      </div>
+
+      <strong class="card-indicador-valor" id="card-presenca-valor">—</strong>
+
+      <span class="card-indicador-detalhe" id="card-presenca-detalhe">
+        Aguardando leitura
+      </span>
+    </article>
+
+    <!-- REGISTROS HOJE -->
+    <article class="card-indicador">
+      <div class="card-indicador-topo">
+        <span class="card-indicador-titulo">Registros hoje</span>
+        <span class="card-indicador-icone">▤</span>
+      </div>
+
+      <strong class="card-indicador-valor" id="card-registros-hoje">—</strong>
+
+      <span class="card-indicador-detalhe" id="card-registros-hoje-detalhe">
+        Pontos exibidos no gráfico hoje
+      </span>
+    </article>
+
+    <!-- MAIOR ATIVIDADE -->
+    <article class="card-indicador">
+      <div class="card-indicador-topo">
+        <span class="card-indicador-titulo">Maior atividade</span>
+        <span class="card-indicador-icone">◷</span>
+      </div>
+
+      <strong class="card-indicador-valor" id="card-horario-pico">—</strong>
+
+      <span class="card-indicador-detalhe" id="card-horario-pico-detalhe">
+        Horário com mais registros
+      </span>
+    </article>
+
+    <!-- TOTAL NO PERÍODO -->
+    <article class="card-indicador">
+      <div class="card-indicador-topo">
+        <span class="card-indicador-titulo">Total no período</span>
+        <span class="card-indicador-icone">Σ</span>
+      </div>
+
+      <strong class="card-indicador-valor" id="card-total-periodo">—</strong>
+
+      <span class="card-indicador-detalhe" id="card-total-periodo-detalhe">
+        Registros com presença
+      </span>
+    </article>
+
+  </section>
+
+  <!-- GRÁFICO -->
+  <div class="grafico alto">
+    <canvas id="graf-presenca" role="img"
+      aria-label="Gráfico por dia e horário que indica os horários em que havia pessoas na sala">
+    </canvas>
+  </div>
+
+  <!-- LEGENDA -->
+  <p class="legenda">
+    <span>
+      <span class="ponto"></span>
+      Há pessoas na sala
+    </span>
+
+    <span>
+      Sem marcação: sem pessoas detectadas
+    </span>
+  </p>
+
+  <!-- RESUMO -->
   <p class="resumo" id="resumo"></p>
-  <p class="vazio" id="vazio" hidden>Nenhuma leitura neste dia.</p>
+
+  <!-- MENSAGEM QUANDO NÃO HÁ REGISTROS -->
+  <p class="vazio" id="vazio" hidden>
+    Nenhuma presença registrada neste período.
+  </p>
+
 </section>
 
-<p class="rodape" id="status">Carregando dados...</p>
+<!-- STATUS DE ATUALIZAÇÃO -->
+<p class="rodape" id="status">
+  Carregando dados...
+</p>
+
 {% endblock %}
 
 {% block scripts %}
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
 <script src="{{ url_for('static', filename='js/painel.js') }}"></script>
+
 {% endblock %}

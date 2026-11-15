@@ -5,35 +5,102 @@
 {% block conteudo %}
 <article class="painel texto">
   <div class="coluna">
+
     <h2>O que é o projeto</h2>
-    <p>Este projeto conta quantas pessoas entraram na sala de aula do Instituto de Computação da Unicamp. A contagem é
-      feita por um ESP32, um microcontrolador com Wi-Fi, e os resultados aparecem neste painel.</p>
-    <p>É um projeto de mestrado em desenvolvimento, e o painel mostra os dados à medida que o ESP32 os envia.</p>
+
+    <p>
+      Este projeto, desenvolvido no Instituto de Computação da
+      Universidade Estadual de Campinas (UNICAMP), utiliza tecnologias
+      de Internet das Coisas (IoT) e informações do sinal Wi-Fi para
+      monitorar a presença de pessoas em uma sala de aula.
+    </p>
+
+    <p>
+      A coleta de dados é realizada por um ESP32, que obtém informações
+      de CSI (Channel State Information) do sinal Wi-Fi e as envia para
+      um servidor. Essas informações são utilizadas pelo sistema para
+      acompanhar a presença no ambiente e disponibilizadas neste painel
+      para visualização.
+    </p>
 
     <h2>Como funciona</h2>
+
     <ol>
-      <li>O ESP32 detecta quando uma pessoa entra na sala.</li>
-      <li>Ele envia os registros pela internet para a nuvem (AWS), onde ficam guardados em um banco de dados.</li>
-      <li>Este painel consulta esses dados e os mostra na tela.</li>
+      <li>
+        O ESP32 realiza medições de CSI (Channel State Information),
+        obtendo informações relacionadas ao sinal Wi-Fi no ambiente.
+      </li>
+      <li>
+        As medições coletadas são enviadas pela internet para a infraestrutura
+        da AWS, onde são disponibilizadas por meio de uma API e armazenadas
+        em um banco de dados.
+      </li>
+      <li>
+        O painel consulta a API para obter os dados e apresentar as
+        informações de presença.
+      </li>
+      <li>
+        Os dados são organizados e exibidos em indicadores e gráficos,
+        permitindo acompanhar os registros de presença ao longo dos
+        dias e horários.
+      </li>
     </ol>
 
     <h2>O que o painel mostra</h2>
+
     <ul>
-      <li><strong>Há pessoas na sala?</strong> Sim ou Não, de acordo com os dados mais recentes.</li>
-      <li><strong>Pessoas na sala ao longo do dia:</strong> um gráfico com a quantidade de pessoas em cada momento do
-        dia escolhido.</li>
+      <li>
+        <strong>Presença atual:</strong> indica se há pessoas na sala,
+        considerando a leitura mais recente recebida.
+      </li>
+      <li>
+        <strong>Registros hoje:</strong> apresenta a quantidade de registros
+        de presença exibidos no gráfico no dia atual.
+      </li>
+      <li>
+        <strong>Maior atividade:</strong> identifica o horário com maior
+        quantidade de registros de presença no dia.
+      </li>
+      <li>
+        <strong>Total no período:</strong> apresenta o total de registros
+        com presença no intervalo selecionado.
+      </li>
+      <li>
+        <strong>Presença por dia e horário:</strong> gráfico em que cada
+        ponto verde representa um registro de presença em determinado
+        horário e dia.
+      </li>
     </ul>
 
     <h2>Tecnologias</h2>
+
     <ul>
-      <li>ESP32 para a coleta dos dados</li>
-      <li>AWS para a API e o banco de dados</li>
-      <li>Python e Flask para servir o painel</li>
-      <li>Chart.js para o gráfico</li>
-      <li>PythonAnywhere para hospedar o painel</li>
+      <li>
+        <strong>ESP32:</strong> microcontrolador utilizado para realizar
+        as medições de CSI do sinal Wi-Fi.
+      </li>
+      <li>
+        <strong>AWS:</strong> infraestrutura em nuvem utilizada para
+        disponibilização da API e armazenamento dos dados.
+      </li>
+      <li>
+        <strong>Python e Flask:</strong> utilizados no desenvolvimento
+        do servidor e do painel web.
+      </li>
+      <li>
+        <strong>Chart.js:</strong> biblioteca utilizada para a construção
+        dos gráficos.
+      </li>
+      <li>
+        <strong>PythonAnywhere:</strong> plataforma de hospedagem do
+        painel web.
+      </li>
     </ul>
 
-    <p><a href="{{ url_for('index') }}">Ver o painel</a></p>
+    <p>
+      <a href="{{ url_for('index') }}">Ver o painel</a>
+    </p>
+
   </div>
 </article>
 {% endblock %}
