@@ -1,43 +1,116 @@
 <!doctype html>
 <html lang="pt-BR">
+
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>{% block titulo %}Unicamp IoT{% endblock %}</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/estilo.css') }}">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{% block titulo %}Unicamp IoT{% endblock %}</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500&display=swap"
+    rel="stylesheet">
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/estilo.css') }}">
+
+  <script>
+    (() => {
+      const CHAVE_NAVEGACAO = 'unicampIoT_navegacaoInterna';
+      const CHAVE_CONEXAO = 'unicampIoT_apiConectada';
+
+      // Verifica se a página anterior iniciou uma navegação interna.
+      const navegacaoInterna =
+        sessionStorage.getItem(CHAVE_NAVEGACAO) === 'true';
+
+      // O marcador é consumido nesta página.
+      sessionStorage.removeItem(CHAVE_NAVEGACAO);
+
+      // Se não foi uma navegação interna, limpa a conexão.
+      // Isso acontece, por exemplo, ao atualizar a página.
+      if (!navegacaoInterna) {
+        sessionStorage.removeItem(CHAVE_CONEXAO);
+      }
+
+      // Identifica os cliques nos links do site.
+      document.addEventListener('click', (event) => {
+        const link = event.target.closest('a[href]');
+
+        if (!link) return;
+
+        // Ignora cliques que abrem outra aba ou janela.
+        if (
+          event.button !== 0 ||
+          event.ctrlKey ||
+          event.metaKey ||
+          event.shiftKey ||
+          event.altKey ||
+          (link.target && link.target !== '_self') ||
+          link.hasAttribute('download')
+        ) {
+          return;
+        }
+
+        const destino = new URL(link.href, window.location.href);
+
+        // Se for um link externo, encerra a conexão salva.
+        if (destino.origin !== window.location.origin) {
+          sessionStorage.removeItem(CHAVE_CONEXAO);
+          sessionStorage.removeItem(CHAVE_NAVEGACAO);
+          return;
+        }
+
+        // Evita marcar links que apenas mudam a âncora da mesma página.
+        if (
+          destino.pathname === window.location.pathname &&
+          destino.search === window.location.search
+        ) {
+          return;
+        }
+
+        // Marca que o usuário está navegando dentro do site.
+        sessionStorage.setItem(CHAVE_NAVEGACAO, 'true');
+      }, true);
+    })();
+  </script>
+
 </head>
+
 <body>
-<header>
-  <div class="wrap topo">
-    <div>
-      <h1>Unicamp IoT</h1>
-      <p class="sub">Contagem de pessoas na sala de aula</p>
+
+  <header>
+    <div class="wrap topo">
+      <div>
+        <h1>SmartClass</h1>
+        <p class="sub">Monitoramento inteligente de ambientes acadêmicos</p>
+        <p class="sub"> Projeto acadêmico - IoT - UNICAMP</p>
+      </div>
     </div>
-    {% block hoje %}{% endblock %}
-  </div>
-  <nav class="wrap abas" aria-label="Principal">
-    <a href="{{ url_for('index') }}"{% if pagina == 'painel' %} aria-current="page"{% endif %}>Painel</a>
-    <a href="{{ url_for('sobre') }}"{% if pagina == 'sobre' %} aria-current="page"{% endif %}>Sobre o projeto</a>
-  </nav>
-</header>
 
-<main class="wrap">
-{% block conteudo %}{% endblock %}
-</main>
-
-<footer class="rodape-site">
-  <div class="wrap rodape-conteudo">
-    <p>Unicamp IoT é um projeto de mestrado que conta as pessoas que entram na sala de aula do Instituto de Computação da Unicamp.</p>
-    <nav aria-label="Rodapé">
-      <a href="{{ url_for('index') }}">Painel</a>
-      <a href="{{ url_for('sobre') }}">Sobre o projeto</a>
+    <nav class="wrap abas" aria-label="Principal">
+      <a href="{{ url_for('index') }}" {% if pagina=='painel' %} aria-current="page" {% endif %}>Painel</a>
+      <a href="{{ url_for('sobre') }}" {% if pagina=='sobre' %} aria-current="page" {% endif %}>Sobre o projeto</a>
     </nav>
-  </div>
-</footer>
+  </header>
 
-{% block scripts %}{% endblock %}
+  <main class="wrap">
+    {% block conteudo %}{% endblock %}
+  </main>
+
+  <footer class="rodape-site">
+    <div class="wrap rodape-conteudo">
+      <p>SmartClass é um pojeto desenvolvido no Instituto de Computação da UNICAMP, que utiliza tecnologias de Internet
+        das Coisas (IoT) e informações do sinal Wi-Fi (CSI) para monitorar
+        a presença e a ocupação de uma sala de aula.</p>
+      <nav aria-label="Rodapé">
+        <a href="{{ url_for('index') }}">Painel</a>
+        <a href="{{ url_for('sobre') }}">Sobre o projeto</a>
+      </nav>
+    </div>
+  </footer>
+
+  {% block scripts %}{% endblock %}
+
 </body>
+
 </html>

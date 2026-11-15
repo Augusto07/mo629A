@@ -1,11 +1,14 @@
-"""Modelo de configuração.
+import os
 
-Copie este arquivo para "config.py" e ajuste os valores.
-O config.py NÃO deve ir para o GitHub (já está no .gitignore).
+"""
+Configurações do projeto Unicamp IoT.
+
+O token não deve ser compartilhado ou enviado ao GitHub.
 """
 
-# Endereço base da API na AWS, sem barra no final. Por exemplo:
-# API_BASE_URL = "https://abc123.execute-api.sa-east-1.amazonaws.com/prod"
-#
-# Deixe vazio para ver o painel com dados de demonstração.
-API_BASE_URL = ""
+API_BASE_URL = os.getenv(
+    "API_BASE_URL",
+    "https://j8wv601b6h.execute-api.us-east-2.amazonaws.com/model-result"
+)
+
+API_TOKEN = os.getenv("API_TOKEN", "")
